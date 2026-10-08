@@ -31,7 +31,7 @@ jobs:
           name: plume-${{ matrix.os }}
           path: |
             release/Plume-*
-            !release/**/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
 
   publish:

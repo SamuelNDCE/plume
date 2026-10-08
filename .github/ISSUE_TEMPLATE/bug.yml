@@ -1,0 +1,25 @@
+name: Bug report
+description: Something is broken or looks wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What is wrong, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the file type, and attach a small file that triggers it if you can.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plume version and system
+      placeholder: "0.1.0, Windows 11"
+    validations:
+      required: true

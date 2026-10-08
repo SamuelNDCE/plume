@@ -1,17 +1,17 @@
 // Sidebar: the Library pane (open documents, folder tree, recent files) and the pane switcher.
-// Outline and Search render into their own panes; this module only shows the one chosen in settings.
+// Search renders into its own pane; this module only shows the one chosen in settings (a saved 'outline' means files).
 // Relies only on the app contract in src/app.js. Output is built with DOM APIs (no innerHTML).
 
-const TITLES = { files: 'Library', outline: 'Outline', search: 'Search' }
-const PANE_IDS = { files: 'files-pane', outline: 'outline-pane', search: 'search-pane' }
+const TITLES = { files: 'Library', search: 'Search' }
+const PANE_IDS = { files: 'files-pane', search: 'search-pane' }
 const IMG_EXT = /^(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
 
 export function init(app) {
   const $ = (s) => document.querySelector(s)
-  const titleEl = $('#sidebar-title')
+  const tabsEl = $('#sidebar-tabs')
   const actionsEl = $('#sidebar-actions')
   const filesPane = $('#files-pane')
-  if (!titleEl || !filesPane) return
+  if (!tabsEl || !filesPane) return
 
   const collapsed = new Set() // folder paths the user collapsed
   let pending = null // { mode: 'create', dir } | { mode: 'rename', path }
@@ -126,6 +126,8 @@ export function init(app) {
   filesPane.append(openSec, folderSec, recentSec)
 
   if (actionsEl) {
+    // + New / Open live at the top of the Files pane, not in the tab strip.
+    filesPane.insertBefore(actionsEl, openSec)
     actionsEl.textContent = ''
     actionsEl.append(
       miniBtn('+ New', () => app.actions.newTab()),
@@ -455,10 +457,28 @@ export function init(app) {
       const node = document.getElementById(id)
       if (node) node.hidden = key !== pane
     }
-    titleEl.textContent = TITLES[pane]
+    tabsEl.querySelectorAll('button[data-pane]').forEach((b) => {
+      const on = b.dataset.pane === pane
+      b.classList.toggle('active', on)
+      b.setAttribute('aria-selected', String(on))
+      b.tabIndex = on ? 0 : -1
+    })
   }
 
   /* ---------- wiring ---------- */
+  tabsEl.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-pane]')
+    if (b && PANE_IDS[b.dataset.pane] && app.settings.get('sidebarTab') !== b.dataset.pane) app.settings.set('sidebarTab', b.dataset.pane)
+  })
+  tabsEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    const keys = Object.keys(PANE_IDS)
+    const cur = Math.max(0, keys.indexOf(app.settings.get('sidebarTab') || 'files'))
+    const next = keys[(cur + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length]
+    app.settings.set('sidebarTab', next)
+    const nb = tabsEl.querySelector(`[data-pane="${next}"]`)
+    if (nb) nb.focus()
+  })
   app.bus.on('tab:list', () => {
     renderOpen()
     renderRecent()

@@ -1,3 +1,4 @@
+import logoUrl from '../assets/plume-logo.svg'
 // Calm empty state. DOM APIs / textContent only (icons come from static header.js strings).
 import { ICONS } from './header.js'
 
@@ -32,6 +33,12 @@ export function init(app) {
   function render() {
     root.textContent = ''
     const wrap = el('div', 'em-wrap')
+    const mark = el('img', 'em-logo')
+    mark.src = logoUrl
+    mark.alt = ''
+    mark.width = 64
+    mark.height = 64
+    wrap.appendChild(mark)
     wrap.appendChild(el('h1', 'em-mark', 'Plume'))
     wrap.appendChild(el('p', 'em-tag', 'A quiet place to read and write Markdown.'))
 

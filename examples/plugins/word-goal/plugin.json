@@ -1,0 +1,9 @@
+{
+  "id": "word-goal",
+  "name": "Word Goal",
+  "version": "1.0.0",
+  "description": "Daily word goal with a progress indicator in the status bar.",
+  "author": "Plume examples",
+  "main": "index.js",
+  "permissions": ["editor:read", "ui:statusbar", "storage"]
+}

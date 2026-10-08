@@ -1,4 +1,4 @@
-// Rail icons + wiring, breadcrumb, header actions. DOM APIs only.
+// Shared icons, sidebar toggle, breadcrumb, header actions. DOM APIs only.
 const p = (d) => `<path d="${d}"/>`
 const svg = (inner) =>
   `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`
@@ -8,6 +8,7 @@ export const ICONS = {
   files: svg(p('M4 6.5A1.5 1.5 0 0 1 5.5 5h4l2 2.2h7A1.5 1.5 0 0 1 20 8.7V17.5A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z')),
   outline: svg(p('M5 7h14M5 12h10M5 17h12')),
   search: svg('<circle cx="11" cy="11" r="6"/>' + p('m20 20-4.2-4.2')),
+  sidebar: svg('<rect x="4" y="5" width="16" height="14" rx="2"/>' + p('M9.5 5v14')),
   settings: svg(p('M4 8h9M17 8h3M4 16h3M11 16h9') + '<circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/>'),
   save: svg(p('M6 4h10l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z') + p('M8 4v5h7V4M8 20v-6h8v6')),
   find: svg('<circle cx="10.5" cy="10.5" r="5.5"/>' + p('m15 15 4.5 4.5M8.5 10.5h4')),
@@ -24,44 +25,10 @@ export const ICONS = {
   check: svg(p('m5 12.5 4.5 4.5L19 7.5')),
 }
 
-const PANES = ['files', 'outline', 'search']
 const baseName = (s) => s.split(/[\\/]/).pop()
 
 export function init(app) {
   const $ = (s) => document.querySelector(s)
-
-  /* ---- rail ---- */
-  document.querySelectorAll('#rail-top button').forEach((b) => {
-    b.innerHTML = ICONS[b.dataset.pane] || ''
-  })
-  const rs = $('#rail-settings')
-  if (rs) {
-    rs.innerHTML = ICONS.settings
-    rs.addEventListener('click', () => app.commands.run('settings.open'))
-  }
-  const syncRail = () => {
-    const open = app.settings.get('sidebar')
-    const tab = app.settings.get('sidebarTab')
-    document.querySelectorAll('#rail-top button').forEach((b) => b.classList.toggle('active', open && b.dataset.pane === tab))
-  }
-  document.querySelectorAll('#rail-top button').forEach((b) => {
-    b.addEventListener('click', () => {
-      const pane = b.dataset.pane
-      if (!PANES.includes(pane)) return
-      const open = app.settings.get('sidebar')
-      if (open && app.settings.get('sidebarTab') === pane) {
-        app.settings.set('sidebar', false)
-        return
-      }
-      if (app.settings.get('sidebarTab') !== pane) app.settings.set('sidebarTab', pane)
-      if (!open) app.settings.set('sidebar', true)
-      syncRail()
-    })
-  })
-  app.bus.on('settings:change', ({ key }) => {
-    if (key === 'sidebarTab' || key === 'sidebar') syncRail()
-  })
-  syncRail()
 
   /* ---- breadcrumb ---- */
   const crumb = $('#crumb')
@@ -134,6 +101,16 @@ export function init(app) {
     actions.appendChild(iconBtn(ICONS.present, 'Present', () => app.commands.run('view.presentation')))
     actions.appendChild(iconBtn(ICONS.settings, 'Settings (Ctrl+,)', () => app.commands.run('settings.open')))
   }
+
+  const toggle = iconBtn(ICONS.sidebar, 'Toggle sidebar (Ctrl+\\)', () => app.commands.run('view.sidebar'))
+  toggle.id = 'sidebar-toggle'
+  const syncToggle = () => toggle.classList.toggle('on', !!app.settings.get('sidebar'))
+  syncToggle()
+  app.bus.on('settings:change', ({ key }) => {
+    if (key === 'sidebar') syncToggle()
+  })
+  const headerEl = $('#header')
+  if (headerEl) headerEl.insertBefore(toggle, headerEl.firstChild)
 
   const render = () => {
     renderCrumb()

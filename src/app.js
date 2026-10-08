@@ -57,7 +57,7 @@ const DEFAULTS = {
   sidebarTab: 'files',
   sidebarWidth: 260,
   fontSize: 17,
-  fontFamily: 'serif',
+  fontFamily: 'theme',
   maxWidth: 820,
   autosave: true,
   spellcheck: true,
@@ -65,6 +65,17 @@ const DEFAULTS = {
   wrapSource: true,
   lineHeight: 1.7,
   zen: false,
+  // typography overrides: empty string / 0 means 'use the theme's value'
+  fontBody: '',
+  fontHeading: '',
+  fontMono: '',
+  headingScale: 0,
+  paraSpacing: 0,
+  accent: '',
+  customCss: '',
+  chartStyle: '',
+  pluginsConsent: false,
+  checkUpdates: true,
 }
 
 class Settings {
@@ -74,6 +85,8 @@ class Settings {
     try {
       Object.assign(this.data, JSON.parse(localStorage.getItem('folio.settings') || '{}'))
     } catch {}
+    // 'serif' was the old default before themes carried their own typography: follow the theme instead
+    if (this.data.fontFamily === 'serif') this.data.fontFamily = 'theme'
   }
   get(k) {
     return this.data[k]
@@ -95,6 +108,10 @@ export function createApp() {
     settings: new Settings(bus),
     state: { tabs: [], active: -1, folder: null, mode: 'wysiwyg' },
     actions: {},
+    // custom fenced-block renderers: lang -> (code, ctx) => HTMLElement | SVG string | Promise of either. Used by the editor preview.
+    blocks: new Map(),
+    // filled by src/themes/registry.js: { list(), get(id), apply(id), register(def), onChange(cb) }
+    themes: null,
     getMarkdown: () => '',
     setMarkdown: () => {},
     toast(msg) {

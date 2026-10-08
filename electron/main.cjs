@@ -7,16 +7,45 @@ const MD_EXT = new Set(['.md', '.markdown', '.mdown', '.mkd'])
 const IMG_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif'])
 const TEXT_EXT = new Set(['.txt', '.text', '.log', '.json', '.jsonc', '.json5', '.csv', '.tsv', '.xml', '.yaml', '.yml', '.toml', '.ini', '.conf', '.cfg', '.html', '.htm', '.css', '.scss', '.less', '.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx', '.vue', '.svelte', '.py', '.rs', '.go', '.java', '.kt', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.sh', '.bash', '.zsh', '.bat', '.cmd', '.ps1', '.sql', '.lua', '.swift', '.tex', '.rst', '.org', '.diff', '.patch', '.gitignore', '.env.example', '.mdx'])
 const OPENABLE = (p) => { const e = path.extname(p).toLowerCase(); return MD_EXT.has(e) || TEXT_EXT.has(e) || IMG_EXT.has(e) }
+// Optional feature modules (each owned by one area). Required lazily so a missing one never blocks launch.
+const optional = (name) => {
+  try {
+    return require(name)
+  } catch (e) {
+    if (e.code !== 'MODULE_NOT_FOUND') console.error('[main] ' + name, e)
+    return null
+  }
+}
+const pluginsIpc = optional('./plugins-ipc.cjs')
+const themesIpc = optional('./themes-ipc.cjs')
+const updaterIpc = optional('./updater.cjs')
+// Custom schemes must be registered before the app is ready.
+pluginsIpc && pluginsIpc.registerSchemes && pluginsIpc.registerSchemes()
+
 let win = null
 let pendingOpen = process.argv.slice(app.isPackaged ? 1 : 2).find((a) => OPENABLE(a))
 
+// Last-used window colour, so a dark theme never flashes white on launch.
+const bgFile = () => path.join(app.getPath('userData'), 'window-bg.json')
+const readBg = () => {
+  try {
+    return JSON.parse(fs.readFileSync(bgFile(), 'utf8'))
+  } catch {
+    return { color: '#ffffff', dark: false }
+  }
+}
+
 function createWindow() {
+  const bg = readBg()
+  nativeTheme.themeSource = bg.dark ? 'dark' : 'light'
   win = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 640,
     minHeight: 420,
-    backgroundColor: '#ffffff',
+    show: false,
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    backgroundColor: bg.color,
     title: 'Plume',
     autoHideMenuBar: true,
     webPreferences: {
@@ -27,6 +56,7 @@ function createWindow() {
     },
   })
   Menu.setApplicationMenu(null)
+  win.once('ready-to-show', () => win && win.show())
   if (isDev) win.loadURL(process.env.VITE_DEV_URL)
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   // Only web and mail links ever leave the app; anything else (file:, javascript:, custom schemes) is dropped.
@@ -46,6 +76,32 @@ function createWindow() {
     }
   })
   win.on('closed', () => (win = null))
+  // Scripted click-through for QA: PLUME_STEPS=<json file> of [{js?, text?, key?, click?, wait?, shot?}], PLUME_SHOT_DIR=<dir>.
+  if (process.env.PLUME_STEPS) {
+    const errs = []
+    win.webContents.on('console-message', (_e, level, msg) => level >= 2 && errs.push(msg))
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+    win.webContents.on('did-finish-load', () => setTimeout(async () => {
+      const steps = JSON.parse(fs.readFileSync(process.env.PLUME_STEPS, 'utf8'))
+      const dir = process.env.PLUME_SHOT_DIR || '.'
+      const out = []
+      for (const st of steps) {
+        try {
+          if (st.js) out.push(await win.webContents.executeJavaScript(st.js))
+          if (st.text) for (const ch of st.text) { win.webContents.sendInputEvent({ type: 'keyDown', keyCode: ch }); win.webContents.sendInputEvent({ type: 'char', keyCode: ch }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: ch }) ; await sleep(8) }
+          if (st.key) { const mods = st.mods || []; win.webContents.sendInputEvent({ type: 'keyDown', keyCode: st.key, modifiers: mods }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: st.key, modifiers: mods }) }
+          if (st.move) win.webContents.sendInputEvent({ type: 'mouseMove', x: st.move.x, y: st.move.y })
+          if (st.click) { const { x, y } = st.click; win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 }); win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 }) }
+        } catch (e) { errs.push('step ' + JSON.stringify(st).slice(0, 80) + ': ' + e.message) }
+        await sleep(st.wait ?? 400)
+        if (st.shot) fs.writeFileSync(path.join(dir, st.shot), (await win.webContents.capturePage()).toPNG())
+      }
+      try { await win.webContents.session.flushStorageData() } catch {}
+      console.log('RESULTS:' + JSON.stringify(out))
+      console.log('ERRORS:' + JSON.stringify(errs))
+      app.exit(0)
+    }, 3000))
+  }
   if (process.env.PLUME_SMOKE) {
     const errs = []
     win.webContents.on('console-message', (_e, level, msg) => level >= 2 && errs.push(msg))
@@ -199,6 +255,9 @@ ipcMain.handle('app:set-theme-bg', (_e, color, dark) => {
   if (!win) return
   win.setBackgroundColor(color)
   nativeTheme.themeSource = dark ? 'dark' : 'light'
+  try {
+    fs.writeFileSync(bgFile(), JSON.stringify({ color, dark: !!dark }))
+  } catch {}
 })
 ipcMain.handle('app:confirm', async (_e, message, detail, buttons) => {
   const r = await dialog.showMessageBox(win, { type: 'question', message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
@@ -217,6 +276,11 @@ else {
       if (f) win.webContents.send('open-path', f)
     }
   })
-  app.whenReady().then(createWindow)
+  app.whenReady().then(() => {
+    pluginsIpc && pluginsIpc.register({ app, ipcMain, shell, protocol: require('electron').protocol })
+    themesIpc && themesIpc.register({ app, ipcMain, shell })
+    updaterIpc && updaterIpc.register({ app, ipcMain, shell, getWindow: () => win })
+    createWindow()
+  })
   app.on('window-all-closed', () => app.quit())
 }

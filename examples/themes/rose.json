@@ -1,0 +1,18 @@
+{
+  "id": "rose",
+  "name": "Rose",
+  "dark": false,
+  "vars": {
+    "--bg": "#fffafb", "--bg-2": "#fbeff2", "--bg-3": "#ffffff",
+    "--fg": "#3b2430", "--fg-muted": "#92707e", "--border": "rgba(120,50,80,.12)",
+    "--accent": "#c2255c", "--accent-fg": "#ffffff", "--hover": "rgba(120,50,80,.06)", "--code-bg": "#f9e7ed"
+  },
+  "typography": {
+    "body": "'Segoe UI', system-ui, sans-serif", "heading": "Georgia, serif", "mono": "Consolas, monospace",
+    "headingWeight": 600, "headingScale": 1.15, "lineHeight": 1.7, "paragraphSpacing": 0.85, "width": 760
+  },
+  "chart": {
+    "colors": ["#c2255c", "#3b82b8", "#d98c00", "#2f9e77", "#7b5ea7", "#e8590c", "#0b7285", "#8a7480"],
+    "gridOpacity": 0.1, "radius": 5, "strokeWidth": 2.5, "style": "smooth"
+  }
+}

@@ -1,31 +1,52 @@
-// Outline: headings of the open Markdown document as a nested, clickable list.
-// Rich view: built from the rendered h1-h6 elements, so the nth outline entry is the nth heading element.
+// Outline rail: a floating stack of lines along the left edge of the document (one per heading, length = level).
+// Hover or focus opens a details panel to the right listing the headings; click jumps to one.
+// Rich view: built from the rendered h1-h6 elements, so the nth entry is the nth heading element.
 // Source view: built from the Markdown text (ATX headings) and jumps through app.code.
-// Other file kinds (plain text, tables, images) show an empty state.
+// Hidden for non-Markdown documents and for documents without headings.
+
+const MAX_LINES = 24
+const OPEN_DELAY = 80
+const CLOSE_DELAY = 250
+const PIN_MS = 3000
 
 export function init(app) {
-  const $ = (s) => document.querySelector(s)
-  const pane = $('#outline-pane')
-  const scroller = $('#editor-scroll')
-  if (!pane || !scroller) return
+  const host = document.querySelector('#doc')
+  const scroller = document.querySelector('#editor-scroll')
+  if (!host || !scroller) return
 
-  let headings = [] // { level, text, index, line (source only), children }
-  let items = [] // outline buttons, by heading index
+  let headings = [] // { level, text, index, line (source only) }
+  let rows = [] // panel buttons, by heading index
+  let ticks = [] // { el, from } minimap lines, `from` = first heading index it stands for
   let current = -1
   let timer = null
   let frame = 0
   let sig = null
   let codeHooked = false
+  let openT = null
+  let closeT = null
+  let pinT = null
+  let isOpen = false
 
-  const emptyEl = (text) => {
-    const p = document.createElement('p')
-    p.className = 'outline-empty'
-    p.textContent = text
-    return p
-  }
+  /* ---------- DOM ---------- */
+  const root = document.createElement('div')
+  root.id = 'outline-mini'
+  root.hidden = true
+  const trigger = document.createElement('div')
+  trigger.className = 'om-trigger'
+  trigger.setAttribute('role', 'group')
+  trigger.setAttribute('aria-label', 'Document outline')
+  const stack = document.createElement('div')
+  stack.className = 'om-stack'
+  trigger.appendChild(stack)
+  const panel = document.createElement('div')
+  panel.className = 'om-panel'
+  panel.setAttribute('role', 'navigation')
+  panel.setAttribute('aria-label', 'Outline')
+  panel.hidden = true
+  root.append(trigger, panel)
+  host.appendChild(root)
 
   /* ---------- parsing ---------- */
-  // Strip inline markdown so the outline reads as plain text.
   function cleanText(s) {
     return s
       .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -49,85 +70,173 @@ export function init(app) {
       if (fence) return
       const m = raw.match(/^ {0,3}(?:>\s?)*\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/)
       if (!m) return
-      out.push({ level: m[1].length, text: cleanText(m[2]), line, index: out.length, children: [] })
+      out.push({ level: m[1].length, text: cleanText(m[2]), line, index: out.length })
     })
     return out
   }
 
-  // Rendered headings, in document order.
-  function domHeadings() {
+  function headingEls() {
     const pm = document.querySelector('#editor .ProseMirror')
-    if (!pm) return []
-    return [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((node, index) => ({
+    return pm ? [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')] : []
+  }
+
+  function domHeadings() {
+    return headingEls().map((node, index) => ({
       level: Number(node.tagName[1]),
       text: node.textContent.replace(/\s+/g, ' ').trim(),
       index,
-      children: [],
     }))
   }
 
-  // Nest by level: a heading is a child of the nearest preceding heading with a smaller level.
-  function nest(flat) {
-    const root = { level: 0, children: [] }
-    const stack = [root]
-    for (const h of flat) {
-      while (stack.length > 1 && stack[stack.length - 1].level >= h.level) stack.pop()
-      stack[stack.length - 1].children.push(h)
-      stack.push(h)
+  /* ---------- open / close ---------- */
+  function setOpen(v) {
+    if (v === isOpen) return
+    if (v && root.hidden) return
+    isOpen = v
+    root.setAttribute('data-open', String(v))
+    root.classList.toggle('open', v)
+    if (v) {
+      panel.hidden = false
+      // next frame so the transition runs
+      requestAnimationFrame(() => root.classList.contains('open') && panel.classList.add('shown'))
+      const cur = rows[current]
+      if (cur) cur.scrollIntoView({ block: 'nearest' })
+    } else {
+      panel.classList.remove('shown')
+      const done = () => {
+        if (!isOpen) panel.hidden = true
+      }
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) done()
+      else setTimeout(done, 130)
     }
-    return root.children
+  }
+  const clearTimers = () => {
+    clearTimeout(openT)
+    clearTimeout(closeT)
+  }
+  function scheduleOpen() {
+    clearTimers()
+    if (pinT) return
+    openT = setTimeout(() => setOpen(true), OPEN_DELAY)
+  }
+  function scheduleClose() {
+    clearTimers()
+    if (pinT) return
+    closeT = setTimeout(() => setOpen(false), CLOSE_DELAY)
+  }
+  function unpin() {
+    clearTimeout(pinT)
+    pinT = null
+  }
+  function closeNow() {
+    clearTimers()
+    unpin()
+    setOpen(false)
   }
 
-  /* ---------- rendering ---------- */
-  function renderList(nodes, ul) {
-    for (const h of nodes) {
-      const li = document.createElement('li')
-      const btn = document.createElement('button')
-      btn.type = 'button'
-      btn.className = 'outline-item lvl' + h.level
-      btn.textContent = h.text || '(untitled)'
-      btn.title = h.text
-      btn.addEventListener('click', () => goTo(h))
-      li.appendChild(btn)
-      items[h.index] = btn
-      if (h.children.length) {
-        const sub = document.createElement('ul')
-        renderList(h.children, sub)
-        li.appendChild(sub)
-      }
-      ul.appendChild(li)
+  // Used by the outline.show command: open and hold for a few seconds (or until Esc).
+  function pin() {
+    if (root.hidden) return false
+    clearTimers()
+    unpin()
+    setOpen(true)
+    pinT = setTimeout(() => {
+      pinT = null
+      if (!root.matches(':hover') && !root.contains(document.activeElement)) setOpen(false)
+    }, PIN_MS)
+    return true
+  }
+
+  root.addEventListener('mouseenter', scheduleOpen)
+  root.addEventListener('mouseleave', scheduleClose)
+  root.addEventListener('focusin', scheduleOpen)
+  root.addEventListener('focusout', (e) => {
+    if (!root.contains(e.relatedTarget)) scheduleClose()
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isOpen) {
+      closeNow()
+      if (root.contains(document.activeElement)) trigger.blur()
     }
+  })
+  document.addEventListener('mousedown', (e) => {
+    if (isOpen && !root.contains(e.target)) closeNow()
+  })
+
+  /* ---------- rendering ---------- */
+  function hide() {
+    headings = []
+    rows = []
+    ticks = []
+    current = -1
+    sig = null
+    root.hidden = true
+    closeNow()
+    stack.textContent = ''
+    panel.textContent = ''
+  }
+
+  function hover(i, on) {
+    if (rows[i]) rows[i].classList.toggle('hovered', on)
+    const t = ticks.find((x) => x.from === i)
+    if (t) t.el.classList.toggle('hovered', on)
+    if (on && isOpen && rows[i]) rows[i].scrollIntoView({ block: 'nearest' })
   }
 
   function render() {
-    items = []
+    rows = []
+    ticks = []
     current = -1
-    pane.textContent = ''
-    if (!headings.length) {
-      pane.appendChild(emptyEl('No headings yet. Headings you add will appear here.'))
-      return
-    }
-    const ul = document.createElement('ul')
-    ul.className = 'outline-list'
-    renderList(nest(headings), ul)
-    pane.appendChild(ul)
-    highlight()
-  }
+    stack.textContent = ''
+    panel.textContent = ''
 
-  function showEmpty(text) {
-    headings = []
-    sig = null
-    items = []
-    current = -1
-    pane.textContent = ''
-    pane.appendChild(emptyEl(text))
+    // Minimap lines: all headings up to the cap, otherwise evenly thinned.
+    const n = headings.length
+    const shown = n <= MAX_LINES ? headings.map((_, i) => i) : Array.from({ length: MAX_LINES }, (_, k) => Math.round((k * (n - 1)) / (MAX_LINES - 1)))
+    for (const i of shown) {
+      const h = headings[i]
+      const t = document.createElement('button')
+      t.type = 'button'
+      t.className = 'om-tick l' + Math.min(h.level, 4)
+      t.setAttribute('aria-label', h.text || '(untitled)')
+      t.addEventListener('click', () => {
+        goTo(h)
+        closeNow()
+      })
+      t.addEventListener('mouseenter', () => hover(i, true))
+      t.addEventListener('mouseleave', () => hover(i, false))
+      t.addEventListener('focus', () => hover(i, true))
+      t.addEventListener('blur', () => hover(i, false))
+      const bar = document.createElement('i')
+      t.appendChild(bar)
+      stack.appendChild(t)
+      ticks.push({ el: t, from: i })
+    }
+
+    const list = document.createElement('div')
+    list.className = 'om-list'
+    for (const h of headings) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'om-row l' + Math.min(h.level, 4)
+      b.textContent = h.text || '(untitled)'
+      b.title = h.text
+      b.addEventListener('click', () => {
+        goTo(h)
+        closeNow()
+      })
+      list.appendChild(b)
+      rows[h.index] = b
+    }
+    panel.appendChild(list)
+    root.hidden = false
+    highlight()
   }
 
   // Rebuild from the live document only when the heading list actually changed.
   function build() {
     const d = app.state.tabs[app.state.active]
-    if (!d) return showEmpty('Open a document to see its outline.')
-    if (d.kind !== 'md') return showEmpty('Outlines are for Markdown documents.')
+    if (!d || d.kind !== 'md') return hide()
     let list
     let mode
     if (app.state.mode === 'source') {
@@ -137,10 +246,11 @@ export function init(app) {
       mode = 'wysiwyg'
       list = domHeadings()
     } else {
-      return showEmpty('Outlines are for Markdown documents.')
+      return hide()
     }
+    if (!list.length) return hide()
     const key = mode + '|' + list.map((h) => `${h.level}:${h.line ?? ''}:${h.text}`).join('\n')
-    if (key === sig) {
+    if (key === sig && !root.hidden) {
       highlight()
       return
     }
@@ -150,11 +260,6 @@ export function init(app) {
   }
 
   /* ---------- navigation ---------- */
-  function headingEls() {
-    const pm = document.querySelector('#editor .ProseMirror')
-    return pm ? [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')] : []
-  }
-
   function goTo(h) {
     if (app.state.mode === 'source') {
       const code = app.code
@@ -172,7 +277,7 @@ export function init(app) {
     if (!headings.length) return -1
     if (app.state.mode === 'source') {
       if (!app.code) return -1
-      const line = app.code.cursorLine() - 1 // assumes cursorLine() is 1-based, like CodeMirror
+      const line = app.code.cursorLine() - 1 // 1-based -> 0-based
       let idx = -1
       for (const h of headings) if (h.line <= line) idx = h.index
       return idx
@@ -198,12 +303,23 @@ export function init(app) {
     hookCode()
     const idx = computeCurrent()
     if (idx === current) return
-    if (items[current]) items[current].classList.remove('current')
-    current = idx
-    if (items[current]) {
-      items[current].classList.add('current')
-      items[current].scrollIntoView({ block: 'nearest' })
+    if (rows[current]) {
+      rows[current].classList.remove('current')
+      rows[current].removeAttribute('aria-current')
     }
+    current = idx
+    if (rows[current]) {
+      rows[current].classList.add('current')
+      rows[current].setAttribute('aria-current', 'true')
+      if (isOpen) rows[current].scrollIntoView({ block: 'nearest' })
+    }
+    // the minimap line standing for the current heading: last shown line at or before it
+    let hit = -1
+    ticks.forEach((t, k) => {
+      if (t.from <= current) hit = k
+      t.el.classList.remove('current')
+    })
+    if (current >= 0 && ticks[hit]) ticks[hit].el.classList.add('current')
   }
 
   function onScroll() {
@@ -220,10 +336,10 @@ export function init(app) {
     clearTimeout(timer)
     timer = setTimeout(build, 200)
   })
-  app.bus.on('editor:ready', build)
-  app.bus.on('tab:switch', build)
-  app.bus.on('mode:change', build)
-  app.bus.on('empty:show', build)
+  for (const evt of ['editor:ready', 'tab:switch', 'mode:change', 'empty:show']) app.bus.on(evt, build)
+
+  // Ctrl+Shift+L (outline.show): open the panel and hold it briefly.
+  app.outlinePin = pin
 
   build()
 }

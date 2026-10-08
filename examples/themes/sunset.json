@@ -1,0 +1,19 @@
+{
+  "id": "sunset",
+  "name": "Sunset",
+  "dark": false,
+  "vars": {
+    "--bg": "#fff7f0", "--bg-2": "#fdeee1", "--bg-3": "#fffaf5",
+    "--fg": "#3a2a24", "--fg-muted": "#8f7569", "--border": "rgba(90,50,30,.14)",
+    "--accent": "#d9531e", "--accent-fg": "#ffffff", "--hover": "rgba(90,50,30,.07)", "--code-bg": "#fbe6d4"
+  },
+  "typography": {
+    "body": "Georgia, 'Iowan Old Style', serif", "heading": "'Trebuchet MS', 'Segoe UI', sans-serif", "mono": "Consolas, 'Cascadia Code', monospace",
+    "headingWeight": 700, "headingScale": 1.1, "lineHeight": 1.75, "paragraphSpacing": 0.9, "width": 740
+  },
+  "chart": {
+    "colors": ["#d9531e", "#2b6f8f", "#e0a100", "#6b8f3a", "#a14a8a", "#1f9d8a", "#c2354a", "#7d6a5d"],
+    "gridOpacity": 0.12, "radius": 6, "strokeWidth": 3, "style": "smooth"
+  },
+  "mermaid": { "themeVariables": { "primaryColor": "#fde0c9" } }
+}

@@ -254,7 +254,10 @@ export function init(app) {
     }, 0)
   })
   reg('library.show', 'Show Library', 'Ctrl+Shift+E', 'View', () => showSidebar('files'))
-  reg('outline.show', 'Show Outline', 'Ctrl+Shift+L', 'View', () => showSidebar('outline'))
+  reg('outline.show', 'Show Outline', 'Ctrl+Shift+L', 'View', () => {
+    if (app.outlinePin && app.outlinePin()) return
+    app.toast('No headings to outline in this document')
+  })
 
   showHint(!app.state.folder)
 }

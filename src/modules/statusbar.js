@@ -51,6 +51,7 @@ export function init(app) {
   }
 
   const left = el('div', 'sb-left')
+  left.id = 'status-left'
   const pathEl = el('span', 'sb-path')
   const dirtyEl = el('span', 'sb-dirty')
   dirtyEl.title = 'Unsaved changes'
@@ -59,6 +60,7 @@ export function init(app) {
   left.append(pathEl, dirtyEl, kindEl)
 
   const right = el('div', 'sb-right')
+  right.id = 'status-right'
   const wordsEl = el('span', 'sb-stat sb-words')
   const charsEl = el('span', 'sb-stat sb-chars')
   const readEl = el('span', 'sb-stat sb-read')
@@ -121,8 +123,14 @@ export function init(app) {
   function render() {
     hookCode()
     const t = app.state.tabs[app.state.active]
-    pathEl.textContent = t ? t.path || t.name : 'No file'
-    pathEl.title = t && t.path ? t.path : ''
+    // Show only folder/name; the full path is in the tooltip.
+    let shown = 'No file'
+    if (t) {
+      const parts = (t.path || '').split(/[\\/]/).filter(Boolean)
+      shown = parts.length > 1 ? parts.slice(-2).join('/') : t.name || parts[0] || 'Untitled'
+    }
+    pathEl.textContent = shown
+    pathEl.title = t && t.path ? t.path : t ? t.name : ''
     dirtyEl.hidden = !(t && t.dirty)
     kindEl.textContent = t ? KIND_LABEL[t.kind] || '' : ''
     const mode = app.state.mode

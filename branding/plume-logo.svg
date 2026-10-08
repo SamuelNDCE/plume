@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="512" height="512" role="img" aria-label="Plume logo">
+  <title>Plume</title>
+  <rect width="120" height="120" rx="28" fill="#111827"/>
+  <path d="M44 100V22" stroke="#ffffff" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <path d="M50 24C92 14 100 56 70 68C62 71 56 70 50 69Z" fill="#818cf8"/>
+  <path d="M50 69C66 62 80 48 88 34" stroke="#111827" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

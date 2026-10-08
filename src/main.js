@@ -6,19 +6,11 @@ import './themes/themes.css'
 import './modules/modules.css'
 import WELCOME from './welcome.md?raw'
 import { createApp } from './app.js'
-import { createCodeEditor } from './modules/codeeditor.js'
-import { renderCsv, renderImage } from './modules/viewers.js'
 import * as sidebar from './modules/sidebar.js'
 import * as outline from './modules/outline.js'
 import * as statusbar from './modules/statusbar.js'
-import * as palette from './modules/palette.js'
-import * as find from './modules/find.js'
-import * as exporter from './modules/export.js'
 import * as mermaidMod from './modules/mermaid.js'
-import * as viewmodes from './modules/viewmodes.js'
 import * as header from './modules/header.js'
-import * as settingsPanel from './modules/settings.js'
-import * as searchPane from './modules/search.js'
 import * as empty from './modules/empty.js'
 
 const app = createApp()
@@ -56,7 +48,9 @@ function show(view) {
   document.body.classList.toggle('mode-source', view === 'source')
 }
 
-function ensureCode() {
+async function ensureCode() {
+  if (code) return code
+  const { createCodeEditor } = await import('./modules/codeeditor.js')
   if (code) return code
   code = createCodeEditor(cmHost, {
     onChange: (value) => {
@@ -168,12 +162,14 @@ async function render() {
   if (d.kind === 'image') {
     await destroyRich()
     show('image')
+    const { renderImage } = await import('./modules/viewers.js')
     renderImage(viewerHost, d.dataUrl, d.name)
     return
   }
   if (d.kind === 'table' && d.view !== 'source') {
     await destroyRich()
     show('table')
+    const { renderCsv } = await import('./modules/viewers.js')
     renderCsv(viewerHost, d.content, /\.tsv$/i.test(d.name) ? '\t' : ',')
     return
   }
@@ -184,8 +180,10 @@ async function render() {
   }
   await destroyRich()
   show('source')
-  ensureCode().setDoc(d.content, d.name)
-  code.focus()
+  const ce = await ensureCode()
+  ce.setDoc(d.content, d.name)
+  applySettings()
+  ce.focus()
 }
 
 function getMarkdown() {
@@ -473,24 +471,29 @@ app.actions = {
 }
 
 /* ---------- settings application ---------- */
-const THEME_DARK = new Set(['dark', 'nord', 'dracula', 'midnight', 'solarized-dark'])
+const THEME_DARK = new Set(['dark', 'nord', 'dracula', 'midnight'])
+const isDarkTheme = (id) => (app.themes?.get ? !!app.themes.get(id)?.dark : THEME_DARK.has(id))
 function applySettings() {
   const s = app.settings
   const root = document.documentElement
   root.dataset.theme = s.get('theme')
   root.style.setProperty('--fs', s.get('fontSize') + 'px')
-  root.style.setProperty('--doc-width', s.get('maxWidth') + 'px')
-  root.style.setProperty('--lh', String(s.get('lineHeight')))
-  root.dataset.font = s.get('fontFamily')
+  // 820 is the default: leave it unset so the active theme's own width applies
+  if (s.get('maxWidth') === 820) root.style.removeProperty('--doc-width')
+  else root.style.setProperty('--doc-width', s.get('maxWidth') + 'px')
+  // 1.7 is the default: leave it unset so the active theme's own line height applies
+  if (Number(s.get('lineHeight')) === 1.7) root.style.removeProperty('--lh')
+  else root.style.setProperty('--lh', String(s.get('lineHeight')))
+  root.dataset.font = s.get('fontFamily') || 'theme'
   document.body.classList.toggle('focus-mode', s.get('focusMode'))
   document.body.classList.toggle('typewriter', s.get('typewriter'))
   document.body.classList.toggle('no-sidebar', !s.get('sidebar'))
   document.body.classList.toggle('zen', !!s.get('zen'))
   $('#sidebar').style.width = s.get('sidebarWidth') + 'px'
-  api.setThemeBg(getComputedStyle(document.body).backgroundColor, THEME_DARK.has(s.get('theme')))
+  api.setThemeBg(getComputedStyle(document.body).backgroundColor, isDarkTheme(s.get('theme')))
   const pm = editorEl.querySelector('.ProseMirror')
   if (pm) pm.setAttribute('spellcheck', String(s.get('spellcheck')))
-  if (code) code.setOptions({ dark: THEME_DARK.has(s.get('theme')), fontSize: s.get('fontSize') - 2, lineNumbers: s.get('lineNumbersSource'), wrap: s.get('wrapSource') })
+  if (code) code.setOptions({ dark: isDarkTheme(s.get('theme')), fontSize: s.get('fontSize') - 2, lineNumbers: s.get('lineNumbersSource'), wrap: s.get('wrapSource') })
 }
 app.bus.on('settings:change', applySettings)
 
@@ -522,7 +525,7 @@ document.addEventListener('selectionchange', () => {
     drag = false
   })
   window.addEventListener('mousemove', (e) => {
-    if (drag) $('#sidebar').style.width = Math.min(520, Math.max(180, e.clientX - 48)) + 'px'
+    if (drag) $('#sidebar').style.width = Math.min(520, Math.max(180, e.clientX)) + 'px'
   })
 })()
 
@@ -601,7 +604,15 @@ window.addEventListener('beforeunload', () => {
 /* ---------- boot ---------- */
 async function boot() {
   applySettings()
-  for (const m of [header, sidebar, outline, statusbar, palette, find, exporter, mermaidMod, viewmodes, settingsPanel, searchPane, empty]) {
+  // Themes are core: they set the look before first paint of the document.
+  try {
+    const themes = await import('./themes/registry.js')
+    await themes.init(app)
+    if (app.themes && !app.themes.get(app.settings.get('theme'))) app.themes.apply('light')
+  } catch (e) {
+    console.error('[themes]', e)
+  }
+  for (const m of [header, sidebar, outline, statusbar, mermaidMod, empty]) {
     try {
       m.init && m.init(app)
     } catch (e) {
@@ -616,5 +627,32 @@ async function boot() {
   const f = localStorage.getItem('folio.folder')
   if (f) openFolder(f).catch(() => {})
   applySettings()
+  // Everything not needed for first paint loads after it, so the window appears instantly.
+  // A short timer, not requestIdleCallback: that waits for the page to go fully quiet (Mermaid etc.) and delayed Ctrl+P by seconds.
+  setTimeout(async () => {
+    const mods = await Promise.all([
+      import('./modules/palette.js'),
+      import('./modules/find.js'),
+      import('./modules/export.js'),
+      import('./modules/viewmodes.js'),
+      import('./modules/settings.js'),
+      import('./modules/search.js'),
+      import('./modules/updates.js'),
+    ])
+    for (const m of mods) {
+      try {
+        m.init && m.init(app)
+      } catch (e) {
+        console.error('[module init]', e)
+      }
+    }
+    try {
+      const { initPlugins } = await import('./plugins.js')
+      await initPlugins(app)
+    } catch (e) {
+      console.error('[plugins]', e)
+    }
+    app.bus.emit('app:ready')
+  }, 120)
 }
 boot()

@@ -8,15 +8,16 @@ const MAX_ITEMS = 60
 
 const THEMES = [
   ['light', 'Light'],
-  ['dark', 'Dark'],
+  ['github', 'GitHub'],
+  ['newsprint', 'Newsprint'],
   ['sepia', 'Sepia'],
+  ['dark', 'Dark'],
   ['nord', 'Nord'],
   ['dracula', 'Dracula'],
   ['midnight', 'Midnight'],
-  ['solarized-dark', 'Solarized Dark'],
-  ['github', 'GitHub'],
 ]
 const FONTS = [
+  ['theme', 'Theme default'],
   ['serif', 'Serif'],
   ['sans', 'Sans'],
   ['mono', 'Mono'],

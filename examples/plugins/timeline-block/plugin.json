@@ -1,0 +1,9 @@
+{
+  "id": "timeline-block",
+  "name": "Timeline Block",
+  "version": "1.0.0",
+  "description": "Renders ```timeline code blocks as an SVG timeline.",
+  "author": "Plume examples",
+  "main": "index.js",
+  "permissions": ["blocks"]
+}

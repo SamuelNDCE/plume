@@ -1,0 +1,18 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "dark": true,
+  "vars": {
+    "--bg": "#0a0f0a", "--bg-2": "#070b07", "--bg-3": "#111a11",
+    "--fg": "#b6f2b6", "--fg-muted": "#5f9a5f", "--border": "rgba(120,255,120,.16)",
+    "--accent": "#39ff6a", "--accent-fg": "#031004", "--hover": "rgba(120,255,120,.08)", "--code-bg": "#0f180f"
+  },
+  "typography": {
+    "body": "Consolas, 'Cascadia Mono', 'Courier New', monospace", "heading": "Consolas, 'Cascadia Mono', monospace", "mono": "Consolas, 'Cascadia Mono', monospace",
+    "headingWeight": 700, "headingScale": 1.0, "lineHeight": 1.6, "paragraphSpacing": 0.8, "width": 820
+  },
+  "chart": {
+    "colors": ["#39ff6a", "#ffb000", "#2ee6e6", "#ff5fa2", "#c8ff3d", "#7aa2ff", "#ff6b4a", "#8fb58f"],
+    "gridOpacity": 0.18, "radius": 0, "strokeWidth": 1.5, "style": "sharp", "font": "Consolas, 'Courier New', monospace"
+  }
+}

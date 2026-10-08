@@ -1,0 +1,25 @@
+name: Feature or theme idea
+description: Suggest an improvement, a theme, or a plugin hook
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like
+      description: Describe the problem first, then the idea.
+    validations:
+      required: true
+  - type: dropdown
+    id: help
+    attributes:
+      label: Could this be a plugin or theme instead?
+      options:
+        - Not sure
+        - Yes, but the plugin API is missing something
+        - No, it belongs in the core app
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Want to help build it?
+      options:
+        - label: I would like to work on this

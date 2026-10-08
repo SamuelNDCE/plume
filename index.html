@@ -3,29 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' ws://localhost:5199 http://localhost:5199" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https: file: plume-plugin:; style-src 'self' 'unsafe-inline' plume-plugin:; script-src 'self' plume-plugin:; font-src 'self' data:; connect-src 'self' ws://localhost:5199 http://localhost:5199" />
     <title>Plume</title>
+    <link rel="icon" type="image/svg+xml" href="/src/assets/plume-logo.svg" />
   </head>
   <body>
     <div id="app">
-      <nav id="rail" aria-label="Sections">
-        <div id="rail-top">
-          <button data-pane="files" class="active" title="Library (Ctrl+Shift+E)" aria-label="Library"></button>
-          <button data-pane="outline" title="Outline (Ctrl+Shift+L)" aria-label="Outline"></button>
-          <button data-pane="search" title="Search folder (Ctrl+Shift+F)" aria-label="Search"></button>
-        </div>
-        <div id="rail-bottom">
-          <button id="rail-settings" title="Settings (Ctrl+,)" aria-label="Settings"></button>
-        </div>
-      </nav>
       <aside id="sidebar">
         <div id="sidebar-head">
-          <span id="sidebar-title">Library</span>
-          <span id="sidebar-actions"></span>
+          <div id="sidebar-tabs" role="tablist" aria-label="Sidebar">
+            <button type="button" role="tab" data-pane="files" aria-selected="true" class="active">Files</button>
+            <button type="button" role="tab" data-pane="search" aria-selected="false">Search</button>
+          </div>
         </div>
-        <div id="files-pane" class="pane"></div>
-        <div id="outline-pane" class="pane" hidden></div>
-        <div id="search-pane" class="pane" hidden></div>
+        <div id="files-pane" class="pane" role="tabpanel"></div>
+        <div id="search-pane" class="pane" role="tabpanel" hidden></div>
+        <span id="sidebar-actions"></span>
       </aside>
       <div id="sidebar-resizer"></div>
       <main id="main">

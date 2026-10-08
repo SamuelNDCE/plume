@@ -1,10 +1,23 @@
-/* Plume themes.
+/* Plume themes: exactly 8 built-ins (4 light, 4 dark). Each block sets colours, typography and chart style.
    Tokens: --bg (canvas) --bg-2 (sidebar/rail/statusbar) --bg-3 (raised: popups, pills, inputs)
            --fg --fg-muted --border (alpha hairline) --accent --accent-fg --hover --code-bg
-           --shadow --shadow-lg --ring --radius */
-html { --radius: 8px; --doc-width: 760px; --fs: 17px; --lh: 1.7; }
+           --shadow --shadow-lg --ring --radius
+   Typography: --doc-font (body) --font-heading --mono-font --h-weight --h-scale --lh --p-space --doc-width
+   Charts: --chart-1..8 --chart-grid --chart-radius --chart-stroke --chart-font --chart-style
+   Fonts are system stacks only. User/plugin themes (registry.js) fall back to the root defaults below. */
+html { --radius: 8px; --doc-width: 760px; --fs: 17px; --lh: 1.7;
+  /* typography set (themes override; user settings override themes) */
+  --font-body: var(--doc-font); --font-heading: var(--font-body); --font-mono: var(--mono-font);
+  --h-weight: 650; --h-scale: 1; --p-space: .85; }
 
+/* ---------- LIGHT ---------- */
+/* Light: clean modern sans, airy, indigo accent */
 html, html[data-theme="light"] {
+  --doc-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --h-weight: 650; --h-scale: 1; --lh: 1.75; --p-space: .9; --doc-width: 780px;
+  --chart-1: #3b6fd4; --chart-2: #e07b1f; --chart-3: #1f9d6b; --chart-4: #b44fc7; --chart-5: #b88f00; --chart-6: #1c91b8; --chart-7: #d6455d; --chart-8: #6b7280;
+  --chart-grid: color-mix(in srgb, var(--fg) 8%, transparent); --chart-radius: 4px; --chart-stroke: 2.5; --chart-font: var(--doc-font); --chart-style: smooth;
   color-scheme: light;
   --bg: #ffffff; --bg-2: #f7f7f5; --bg-3: #ffffff; --fg: #1d1f23; --fg-muted: #737780;
   --border: rgba(20,22,30,.09); --accent: #4f5bd5; --accent-fg: #ffffff;
@@ -13,16 +26,44 @@ html, html[data-theme="light"] {
   --shadow-lg: 0 2px 6px rgba(20,22,30,.06), 0 18px 48px rgba(20,22,30,.16);
   --ring: color-mix(in srgb, var(--accent) 45%, transparent);
 }
-html[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #1c1d20; --bg-2: #161719; --bg-3: #26272b; --fg: #dcdee2; --fg-muted: #8a8f98;
-  --border: rgba(255,255,255,.075); --accent: #8b95f7; --accent-fg: #11121a;
-  --hover: rgba(255,255,255,.06); --code-bg: #25272b;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
-  --shadow-lg: 0 2px 8px rgba(0,0,0,.4), 0 22px 56px rgba(0,0,0,.55);
-  --ring: color-mix(in srgb, var(--accent) 50%, transparent);
+/* GitHub: GitHub-markdown look */
+html[data-theme="github"] {
+  --doc-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --mono-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --h-weight: 600; --h-scale: .93; --lh: 1.5; --p-space: 1; --doc-width: 860px;
+  --chart-1: #0969da; --chart-2: #bc4c00; --chart-3: #1a7f37; --chart-4: #8250df; --chart-5: #9a6700; --chart-6: #0a7ea4; --chart-7: #cf222e; --chart-8: #59636e;
+  --chart-grid: color-mix(in srgb, var(--fg) 12%, transparent); --chart-radius: 3px; --chart-stroke: 2; --chart-font: var(--doc-font); --chart-style: sharp;
+  color-scheme: light;
+  --bg: #ffffff; --bg-2: #f6f8fa; --bg-3: #ffffff; --fg: #1f2328; --fg-muted: #59636e;
+  --border: rgba(31,35,40,.15); --accent: #0969da; --accent-fg: #ffffff;
+  --hover: rgba(175,184,193,.2); --code-bg: #f6f8fa;
+  --shadow: 0 1px 2px rgba(31,35,40,.06), 0 4px 14px rgba(140,149,159,.22);
+  --shadow-lg: 0 2px 6px rgba(31,35,40,.08), 0 18px 48px rgba(66,74,83,.22);
+  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
 }
+/* Newsprint: high-contrast serif newspaper, narrow measure, red ink */
+html[data-theme="newsprint"] {
+  --doc-font: Georgia, "Times New Roman", Times, "Liberation Serif", serif;
+  --font-heading: Didot, "Bodoni MT", "Hoefler Text", "Times New Roman", Georgia, serif;
+  --h-weight: 800; --h-scale: 1.15; --lh: 1.5; --p-space: .65; --doc-width: 680px;
+  --chart-1: #b3141b; --chart-2: #1f3a5f; --chart-3: #a87a12; --chart-4: #2f6b4f; --chart-5: #6b3f7a; --chart-6: #c2571a; --chart-7: #3d7f99; --chart-8: #4a4540;
+  --chart-grid: color-mix(in srgb, var(--fg) 22%, transparent); --chart-radius: 0px; --chart-stroke: 1.8; --chart-font: var(--doc-font); --chart-style: sharp;
+  color-scheme: light;
+  --bg: #f3f0ea; --bg-2: #eae6dd; --bg-3: #faf8f3; --fg: #141210; --fg-muted: #6a655c;
+  --border: rgba(20,18,16,.2); --accent: #b3141b; --accent-fg: #ffffff;
+  --hover: rgba(20,18,16,.06); --code-bg: #e6e1d6;
+  --shadow: 0 1px 0 rgba(20,18,16,.12), 0 4px 12px rgba(20,18,16,.1);
+  --shadow-lg: 0 2px 6px rgba(20,18,16,.12), 0 18px 44px rgba(20,18,16,.22);
+  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Sepia: warm book page, large serif, generous leading */
 html[data-theme="sepia"] {
+  --doc-font: Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-heading: Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --h-weight: 600; --h-scale: 1.05; --lh: 1.95; --p-space: 1.15; --doc-width: 700px;
+  --chart-1: #a4532a; --chart-2: #2e7d6b; --chart-3: #c28a1c; --chart-4: #6f5aa8; --chart-5: #3d6fa3; --chart-6: #b8456a; --chart-7: #7a8a2e; --chart-8: #6e5f4a;
+  --chart-grid: color-mix(in srgb, var(--fg) 14%, transparent); --chart-radius: 5px; --chart-stroke: 2.5; --chart-font: var(--doc-font); --chart-style: smooth;
   color-scheme: light;
   --bg: #f6efdd; --bg-2: #eee5cd; --bg-3: #faf5e6; --fg: #3f3224; --fg-muted: #8d7d65;
   --border: rgba(67,52,34,.13); --accent: #a4532a; --accent-fg: #fbf5e6;
@@ -31,7 +72,30 @@ html[data-theme="sepia"] {
   --shadow-lg: 0 2px 6px rgba(67,52,34,.1), 0 18px 48px rgba(67,52,34,.22);
   --ring: color-mix(in srgb, var(--accent) 45%, transparent);
 }
+
+/* ---------- DARK ---------- */
+/* Dark: neutral charcoal, sans, blue accent */
+html[data-theme="dark"] {
+  --doc-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --h-weight: 650; --h-scale: 1; --lh: 1.7; --p-space: .85; --doc-width: 780px;
+  --chart-1: #5b9dff; --chart-2: #f2a04a; --chart-3: #4fcf9f; --chart-4: #d68af0; --chart-5: #e6c84b; --chart-6: #5cc0ea; --chart-7: #f0788a; --chart-8: #a3a9b5;
+  --chart-grid: color-mix(in srgb, var(--fg) 13%, transparent); --chart-radius: 4px; --chart-stroke: 2.5; --chart-font: var(--doc-font); --chart-style: smooth;
+  color-scheme: dark;
+  --bg: #1c1d20; --bg-2: #161719; --bg-3: #26272b; --fg: #dcdee2; --fg-muted: #8a8f98;
+  --border: rgba(255,255,255,.075); --accent: #5b9dff; --accent-fg: #0a111c;
+  --hover: rgba(255,255,255,.06); --code-bg: #25272b;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg: 0 2px 8px rgba(0,0,0,.4), 0 22px 56px rgba(0,0,0,.55);
+  --ring: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+/* Nord: cool arctic blues, humanist sans, frost accent */
 html[data-theme="nord"] {
+  --doc-font: Seravek, "Gill Sans Nova", "Segoe UI", Ubuntu, Calibri, Candara, "Trebuchet MS", sans-serif;
+  --font-heading: Seravek, "Gill Sans Nova", "Segoe UI", Ubuntu, Calibri, Candara, "Trebuchet MS", sans-serif;
+  --h-weight: 600; --h-scale: 1.02; --lh: 1.75; --p-space: .95; --doc-width: 760px;
+  --chart-1: #88c0d0; --chart-2: #ebcb8b; --chart-3: #a3be8c; --chart-4: #b48ead; --chart-5: #d08770; --chart-6: #81a1c1; --chart-7: #bf616a; --chart-8: #a7b1c4;
+  --chart-grid: color-mix(in srgb, var(--fg) 15%, transparent); --chart-radius: 6px; --chart-stroke: 2.5; --chart-font: var(--doc-font); --chart-style: smooth;
   color-scheme: dark;
   --bg: #2e3440; --bg-2: #292e39; --bg-3: #3a4252; --fg: #d8dee9; --fg-muted: #8f9bb3;
   --border: rgba(216,222,233,.1); --accent: #88c0d0; --accent-fg: #232831;
@@ -40,42 +104,62 @@ html[data-theme="nord"] {
   --shadow-lg: 0 2px 8px rgba(0,0,0,.35), 0 22px 56px rgba(0,0,0,.5);
   --ring: color-mix(in srgb, var(--accent) 50%, transparent);
 }
+/* Dracula: vivid purple/pink, monospace everything, sharp charts */
 html[data-theme="dracula"] {
+  --doc-font: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-heading: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --h-weight: 700; --h-scale: .92; --lh: 1.7; --p-space: .9; --doc-width: 860px;
+  --chart-1: #bd93f9; --chart-2: #ffb86c; --chart-3: #50fa7b; --chart-4: #ff79c6; --chart-5: #f1fa8c; --chart-6: #8be9fd; --chart-7: #ff5555; --chart-8: #a9b0d0;
+  --chart-grid: color-mix(in srgb, var(--fg) 18%, transparent); --chart-radius: 0px; --chart-stroke: 1.8; --chart-font: var(--mono-font); --chart-style: sharp;
   color-scheme: dark;
-  --bg: #282a36; --bg-2: #22232d; --bg-3: #343746; --fg: #f1f1ec; --fg-muted: #8f97bd;
+  --bg: #282a36; --bg-2: #21222c; --bg-3: #343746; --fg: #f1f1ec; --fg-muted: #8f97bd;
   --border: rgba(248,248,242,.09); --accent: #bd93f9; --accent-fg: #1e1f29;
-  --hover: rgba(248,248,242,.06); --code-bg: #323442;
+  --hover: rgba(248,248,242,.06); --code-bg: #1f2029;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.38);
   --shadow-lg: 0 2px 8px rgba(0,0,0,.4), 0 22px 56px rgba(0,0,0,.55);
   --ring: color-mix(in srgb, var(--accent) 50%, transparent);
 }
+/* Midnight: deep navy, elegant serif, teal accent, rounded charts */
 html[data-theme="midnight"] {
+  --doc-font: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-heading: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --h-weight: 600; --h-scale: 1.1; --lh: 1.85; --p-space: 1; --doc-width: 730px;
+  --chart-1: #2dd4bf; --chart-2: #fbbf6a; --chart-3: #7aa7ff; --chart-4: #c4a3f5; --chart-5: #f4e285; --chart-6: #5fd0f0; --chart-7: #f58a9d; --chart-8: #8b9bb8;
+  --chart-grid: color-mix(in srgb, var(--fg) 12%, transparent); --chart-radius: 9px; --chart-stroke: 3; --chart-font: var(--doc-font); --chart-style: smooth;
   color-scheme: dark;
-  --bg: #0c0e13; --bg-2: #08090d; --bg-3: #151925; --fg: #cdd3df; --fg-muted: #737c90;
-  --border: rgba(255,255,255,.07); --accent: #6aa3ff; --accent-fg: #06080c;
-  --hover: rgba(255,255,255,.055); --code-bg: #131722;
+  --bg: #0b1220; --bg-2: #070c16; --bg-3: #131c30; --fg: #cfd8e8; --fg-muted: #7686a3;
+  --border: rgba(160,185,235,.11); --accent: #2dd4bf; --accent-fg: #04201c;
+  --hover: rgba(160,185,235,.07); --code-bg: #101a2e;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 18px rgba(0,0,0,.5);
   --shadow-lg: 0 2px 10px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.7);
   --ring: color-mix(in srgb, var(--accent) 50%, transparent);
 }
-html[data-theme="solarized-dark"] {
-  color-scheme: dark;
-  --bg: #002b36; --bg-2: #00242e; --bg-3: #08414f; --fg: #9fadad; --fg-muted: #6b8189;
-  --border: rgba(147,161,161,.14); --accent: #2fb5aa; --accent-fg: #002b36;
-  --hover: rgba(147,161,161,.09); --code-bg: #073642;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
-  --shadow-lg: 0 2px 8px rgba(0,0,0,.4), 0 22px 56px rgba(0,0,0,.55);
-  --ring: color-mix(in srgb, var(--accent) 50%, transparent);
-}
-html[data-theme="github"] {
-  color-scheme: light;
-  --bg: #ffffff; --bg-2: #f6f8fa; --bg-3: #ffffff; --fg: #1f2328; --fg-muted: #59636e;
-  --border: rgba(31,35,40,.12); --accent: #0969da; --accent-fg: #ffffff;
-  --hover: rgba(175,184,193,.2); --code-bg: #eff1f3;
-  --shadow: 0 1px 2px rgba(31,35,40,.06), 0 4px 14px rgba(140,149,159,.22);
-  --shadow-lg: 0 2px 6px rgba(31,35,40,.08), 0 18px 48px rgba(66,74,83,.22);
-  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
-}
+
+/* ---------- per-theme document character ---------- */
+html[data-theme="github"] .milkdown .ProseMirror { font-size: calc(var(--fs) * .94); }
+html[data-theme="github"] .milkdown .ProseMirror h1, html[data-theme="github"] .milkdown .ProseMirror h2 { border-bottom: 1px solid #d1d9e0; padding-bottom: .3em; letter-spacing: 0; }
+html[data-theme="github"] .milkdown .ProseMirror pre { border: 0; border-radius: 6px; }
+html[data-theme="github"] .milkdown .ProseMirror blockquote { font-style: normal; border-left: .25em solid #d1d9e0; color: var(--fg-muted); }
+html[data-theme="github"] .milkdown .ProseMirror a { color: #0969da; }
+
+html[data-theme="newsprint"] .milkdown .ProseMirror h1 { border-bottom: 3px double var(--fg); padding-bottom: .22em; letter-spacing: -.015em; line-height: 1.1; }
+html[data-theme="newsprint"] .milkdown .ProseMirror h2 { border-bottom: 1px solid var(--fg); padding-bottom: .12em; letter-spacing: -.005em; }
+html[data-theme="newsprint"] .milkdown .ProseMirror blockquote { font-style: italic; border-left: 2px solid var(--accent); color: var(--fg); }
+
+html[data-theme="sepia"] .milkdown .ProseMirror { font-size: calc(var(--fs) * 1.08); }
+html[data-theme="sepia"] .milkdown .ProseMirror h1 { letter-spacing: -.01em; }
+
+html[data-theme="nord"] .milkdown .ProseMirror a { text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+html[data-theme="dracula"] .milkdown .ProseMirror { font-size: calc(var(--fs) * .92); }
+html[data-theme="dracula"] .milkdown .ProseMirror h1, html[data-theme="dracula"] .milkdown .ProseMirror h2 { letter-spacing: 0; }
+html[data-theme="dracula"] .milkdown .ProseMirror h1::before { content: "# "; color: var(--accent); opacity: .55; }
+html[data-theme="dracula"] .milkdown .ProseMirror h2::before { content: "## "; color: var(--accent); opacity: .55; }
+html[data-theme="dracula"] .milkdown .ProseMirror h3::before { content: "### "; color: var(--accent); opacity: .55; }
+
+html[data-theme="midnight"] .milkdown .ProseMirror { font-size: calc(var(--fs) * 1.04); }
+html[data-theme="midnight"] .milkdown .ProseMirror h1 { letter-spacing: -.005em; }
+html[data-theme="midnight"] .milkdown .ProseMirror blockquote { border-left-color: var(--accent); }
 
 /* Milkdown Crepe mapping: Crepe defines these on .milkdown, so we beat it by specificity. */
 html[data-theme] .milkdown {
@@ -103,3 +187,16 @@ html[data-theme] .milkdown {
   --crepe-shadow-1: var(--shadow);
   --crepe-shadow-2: var(--shadow-lg);
 }
+
+/* Typography driven by variables so a theme can restyle the whole document. */
+html .milkdown .ProseMirror, html #cm-host .cm-editor { font-family: var(--font-body); line-height: var(--lh); }
+html #cm-host .cm-editor .cm-content { font-family: var(--font-mono); }
+html .milkdown .ProseMirror h1, html .milkdown .ProseMirror h2, html .milkdown .ProseMirror h3,
+html .milkdown .ProseMirror h4, html .milkdown .ProseMirror h5, html .milkdown .ProseMirror h6 { font-family: var(--font-heading); font-weight: var(--h-weight); }
+html .milkdown .ProseMirror h1 { font-size: calc(2.15em * var(--h-scale)); }
+html .milkdown .ProseMirror h2 { font-size: calc(1.55em * var(--h-scale)); }
+html .milkdown .ProseMirror h3 { font-size: calc(1.25em * var(--h-scale)); }
+html .milkdown .ProseMirror h4 { font-size: calc(1.05em * var(--h-scale)); }
+html .milkdown .ProseMirror p { margin-top: calc(var(--p-space) * 1em); margin-bottom: calc(var(--p-space) * 1em); }
+html .milkdown .ProseMirror li p, html .milkdown .ProseMirror td p, html .milkdown .ProseMirror th p { margin: 0; }
+html .milkdown .ProseMirror code, html .milkdown .ProseMirror pre { font-family: var(--font-mono); }

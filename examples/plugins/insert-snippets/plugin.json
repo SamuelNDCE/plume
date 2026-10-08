@@ -1,0 +1,9 @@
+{
+  "id": "insert-snippets",
+  "name": "Insert Snippets",
+  "version": "1.0.0",
+  "description": "Commands that insert the date, time, a callout or front matter.",
+  "author": "Plume examples",
+  "main": "index.js",
+  "permissions": ["editor:write", "commands"]
+}
