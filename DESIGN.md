@@ -22,6 +22,7 @@ Exactly 8 built-ins. Light: light, github, newsprint, sepia. Dark: dark, nord, d
 ## Layout
 `#rail` 48px icon rail (36px buttons, soft active pill + 3px indicator) | `#sidebar` (40px head with small-caps title, panes, library list: `.lib-section .lib-title .doc-row(.active .dirty) .doc-name .doc-close`, tree: `.tree-row .tree-folder .tree-file`, `.icon-btn`) | `#main`: `#header` 40px translucent (breadcrumb: last 2 folders muted, strong filename, unsaved dot; right: Rich/Source segmented control for md/table, Save when dirty, Find, Palette, Present, Settings) + `#doc` (one of `#editor-scroll`, `#cm-host`, `#viewer-host`, `#empty`) + `#statusbar` 26px.
 No tab bar: documents live in the sidebar library. Body classes: `zen` (hides rail/sidebar/header/statusbar), `no-sidebar` (rail stays), `mode-source`, `focus-mode` (inactive blocks 32%), `typewriter`.
+The source editor owns undo and redo; its `Ctrl+Shift+Z` binding passes through the app shortcut filter to CodeMirror history.
 
 ## Typography
 Doc font comes from the active theme (`html[data-font="theme"]`, the default); the legacy `data-font` values sans/serif/mono still force a family; Settings > Typography has Body/Heading/Code pickers. Size `--fs`, line-height `--lh`. Headings 2.15 / 1.55 / 1.25 / 1.05em, tight negative tracking, no underline rules. Blockquote: thin accent bar, muted italic. Inline code: bordered pill. Tables: rounded, hairline rows, subtle zebra. HR: hairline.

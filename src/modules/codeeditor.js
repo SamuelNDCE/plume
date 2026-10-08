@@ -8,7 +8,7 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo } from '@codemirror/commands'
 import {
   indentOnInput,
   bracketMatching,
@@ -34,7 +34,8 @@ function isAppKey(k) {
   if (rest === '' && parts.length) rest = '-' // "Mod--"
   const mods = parts.map((p) => p.toLowerCase())
   if (!mods.some((m) => MOD_NAMES.has(m))) return false
-  if (mods.includes('shift') || mods.includes('s')) return true
+  // Shift+Z belongs to editor history; the app does not register it.
+  if (mods.includes('shift') || mods.includes('s')) return rest.toLowerCase() !== 'z'
   return APP_KEYS.has(rest.toLowerCase())
 }
 function filterKeymap(bindings) {
@@ -105,7 +106,14 @@ export function createCodeEditor(host, { onChange } = {}) {
     '&.cm-focused .cm-nonmatchingBracket': { backgroundColor: 'rgba(220, 60, 60, 0.3)' },
   })
 
-  const keys = keymap.of(filterKeymap([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]))
+  const keys = keymap.of(filterKeymap([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...historyKeymap,
+    // historyKeymap only supplies Shift+Z on macOS/Linux; support Windows too.
+    { key: 'Mod-Shift-z', run: redo, preventDefault: true },
+    indentWithTab,
+  ]))
 
   const updater = EditorView.updateListener.of((u) => {
     if (u.docChanged && onChange && !u.transactions.some((t) => t.annotation(programmatic))) {
