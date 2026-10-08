@@ -15,6 +15,8 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,9 +25,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx electron-builder --publish never
+      # Unsigned build: macOS, Linux, and Windows until the Azure signing secrets below exist.
+      - name: Build (unsigned)
+        if: matrix.os != 'windows-latest' || env.AZURE_CLIENT_ID == ''
+        run: npx electron-builder --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Windows build signed with Azure Artifact Signing. Runs automatically once AZURE_* secrets and
+      # AZURE_SIGNING_* variables are set on the repository. Setup: docs/CODE-SIGNING.md
+      - name: Build (Windows, signed)
+        if: matrix.os == 'windows-latest' && env.AZURE_CLIENT_ID != ''
+        run: >
+          npx electron-builder --publish never
+          -c.win.azureSignOptions.endpoint="${{ vars.AZURE_SIGNING_ENDPOINT }}"
+          -c.win.azureSignOptions.codeSigningAccountName="${{ vars.AZURE_SIGNING_ACCOUNT }}"
+          -c.win.azureSignOptions.certificateProfileName="${{ vars.AZURE_SIGNING_PROFILE }}"
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       - uses: actions/upload-artifact@v4
         with:
           name: plume-${{ matrix.os }}
