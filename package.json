@@ -45,23 +45,47 @@
     ],
     "fileAssociations": [
       {
-        "ext": [
-          "md",
-          "markdown",
-          "mdown",
-          "mkd"
-        ],
+        "ext": "md",
         "name": "Markdown document",
         "role": "Editor"
       },
       {
-        "ext": [
-          "txt",
-          "csv",
-          "tsv",
-          "json",
-          "log"
-        ],
+        "ext": "markdown",
+        "name": "Markdown document",
+        "role": "Editor"
+      },
+      {
+        "ext": "mdown",
+        "name": "Markdown document",
+        "role": "Editor"
+      },
+      {
+        "ext": "mkd",
+        "name": "Markdown document",
+        "role": "Editor"
+      },
+      {
+        "ext": "txt",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "csv",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "tsv",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "json",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "log",
         "name": "Text document",
         "role": "Editor"
       }
