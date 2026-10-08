@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self' ws://localhost:5199 http://localhost:5199" />
+    <title>Lumenmark</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <div id="sidebar-tabs">
+          <button data-pane="files" class="active">Files</button>
+          <button data-pane="outline">Outline</button>
+        </div>
+        <div id="files-pane" class="pane"></div>
+        <div id="outline-pane" class="pane" hidden></div>
+      </aside>
+      <div id="sidebar-resizer"></div>
+      <main id="main">
+        <div id="tabbar"></div>
+        <div id="doc">
+          <div id="editor-scroll">
+            <div id="editor"></div>
+          </div>
+          <textarea id="source" hidden spellcheck="false"></textarea>
+        </div>
+        <footer id="statusbar"></footer>
+      </main>
+    </div>
+    <div id="find-root"></div>
+    <div id="palette-root"></div>
+    <div id="toast-root"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

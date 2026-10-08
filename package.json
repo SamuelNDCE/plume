@@ -1,0 +1,30 @@
+{
+  "name": "lumenmark",
+  "version": "0.1.0",
+  "description": "Lumenmark: a free, open-source, WYSIWYG Markdown editor",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "app": "electron .",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "dist": "vite build && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.0.0",
+    "mermaid": "^11.0.0"
+  },
+  "build": {
+    "appId": "dev.lumenmark.app",
+    "productName": "Lumenmark",
+    "files": ["dist/**", "electron/**", "package.json"],
+    "fileAssociations": [{ "ext": ["md", "markdown"], "name": "Markdown" }]
+  }
+}
