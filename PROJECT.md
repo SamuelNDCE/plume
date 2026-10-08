@@ -19,6 +19,7 @@ Free, open-source (MIT) Markdown editor and viewer. Electron + Vite, vanilla JS.
 3. After the run: download `latest.yml` and the Windows setup exe and confirm the sha512 and size match (the in-app updater depends on it). Installer names: `Plume-<version>-win-x64-setup.exe`, `...-win-x64-portable.exe`, `...-mac-arm64.dmg`, `...-linux-x86_64.AppImage`, `...-linux-amd64.deb`.
 4. v0.1.0 builds have no updater. 0.2.0 is the first that can update itself.
 5. Signing is wired for Azure Artifact Signing and runs only when the `AZURE_*` secrets and variables exist. See `docs/CODE-SIGNING.md`. Not set up yet.
+   > Update 2026-10-09: signing is postponed. Azure is dropped (paid); the plan is to apply to SignPath Foundation (free, Windows only) once the project has traction. macOS stays unsigned. README has a first-run note.
 
 ## Rules
 - Modules live in `src/modules/*.js`, each exports `init(app)`; the contract is the header of `src/app.js`. Style with the CSS variables in `DESIGN.md` only, no hard-coded colours. Heavy or rare features load lazily after first paint.
