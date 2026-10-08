@@ -13,8 +13,8 @@
     "dist": "vite build && electron-builder"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
     "vite": "^6.0.0"
   },
   "dependencies": {
@@ -148,5 +148,8 @@
     "mermaid",
     "electron",
     "open-source"
-  ]
+  ],
+  "overrides": {
+    "katex": "^0.18.10"
+  }
 }
