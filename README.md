@@ -256,6 +256,8 @@ Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Good places t
 | `Ctrl+/` | Rich / source view |
 | `Ctrl+P` | Command palette |
 | `Ctrl+F` / `Ctrl+H` | Find / replace |
+| `Ctrl+Z` | Undo in source view |
+| `Ctrl+Shift+Z` / `Ctrl+Y` | Redo in source view |
 | `Ctrl+Shift+F` | Search folder |
 | `Ctrl+,` | Settings |
 | `F5` | Presentation |
