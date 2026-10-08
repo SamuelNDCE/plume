@@ -33,6 +33,14 @@ PLUME_SMOKE=smoke.png npx electron .
 | `docs/THEMES.md` | How to write a theme |
 | `DESIGN.md` | Design tokens and rules. Style with the CSS variables only |
 
+## Tests
+
+```bash
+node --test test/sheet-core.test.mjs
+```
+
+runs the spreadsheet logic tests (parsing, formulas, sorting, undo). `tests/source-redo.cjs` is an Electron check for source-view shortcuts: build first (`npm run build`), then `npx electron tests/source-redo.cjs`.
+
 ## Easiest ways to help
 
 - **Make a theme.** A theme is one JSON file. See `docs/THEMES.md`; share it by opening a pull request that adds it to `examples/themes/`.

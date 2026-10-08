@@ -150,8 +150,56 @@ function applyImagePaths() {
   fix()
 }
 
+// CSV / TSV open in the spreadsheet grid. Its text stays live on the doc, so the normal save path works.
+let activeSheet = null
+let sheetToken = 0
+function leaveSheet() {
+  sheetToken++
+  if (!activeSheet) return
+  const v = activeSheet
+  activeSheet = null
+  try {
+    v.destroy && v.destroy()
+  } catch {}
+  viewerHost.textContent = ''
+}
+
+async function mountSheetFor(d) {
+  const token = ++sheetToken
+  viewerHost.textContent = ''
+  try {
+    const { mount } = await import('./modules/sheet.js')
+    const view = await mount(
+      viewerHost,
+      { name: d.name, text: d.content, delimiter: /\.tsv$/i.test(d.name) ? '\t' : undefined },
+      {
+        toast: (m) => app.toast(m),
+        setText(t) {
+          // no 'is this the active doc' guard: the grid flushes a last edit while a tab switch tears it down
+          d.content = t
+          d.dirty = d.content !== d.saved
+          onDocChanged()
+        },
+      },
+    )
+    if (token !== sheetToken || doc() !== d) {
+      view && view.destroy && view.destroy()
+      return
+    }
+    activeSheet = view
+  } catch (e) {
+    console.error('[sheet]', e)
+    if (token !== sheetToken) return
+    const box = document.createElement('div')
+    box.className = 'viewer-error'
+    box.textContent = 'Could not open ' + d.name + ': ' + ((e && e.message) || e)
+    viewerHost.appendChild(box)
+  }
+}
+
 // Put the right view on screen for the active doc.
 async function render() {
+  leaveSheet()
   const d = doc()
   if (!d) {
     await destroyRich()
@@ -169,8 +217,7 @@ async function render() {
   if (d.kind === 'table' && d.view !== 'source') {
     await destroyRich()
     show('table')
-    const { renderCsv } = await import('./modules/viewers.js')
-    renderCsv(viewerHost, d.content, /\.tsv$/i.test(d.name) ? '\t' : ',')
+    await mountSheetFor(d)
     return
   }
   if (d.kind === 'md' && d.view !== 'source') {
@@ -195,7 +242,7 @@ function getMarkdown() {
 // Pull the live editor text into the doc record.
 function syncActive() {
   const d = doc()
-  if (!d || d.kind === 'image') return
+  if (!d || d.kind === 'image' || (d.kind === 'table' && app.state.mode === 'table')) return
   if (app.state.mode === 'wysiwyg' && crepe) d.content = crepe.getMarkdown()
   else if (app.state.mode === 'source' && code) d.content = code.getValue()
   d.dirty = d.content !== d.saved

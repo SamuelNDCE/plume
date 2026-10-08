@@ -89,7 +89,7 @@ function register({ app, ipcMain, shell, getWindow }) {
   })
   ipcMain.handle('update:install', () => {
     const u = load()
-    if (u && state.state === 'ready') u.quitAndInstall(false, true)
+    if (u && state.state === 'ready') u.quitAndInstall(true, true)
     return true
   })
   ipcMain.handle('update:releases', () => {

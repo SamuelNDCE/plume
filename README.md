@@ -65,8 +65,8 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 <img src="docs/screenshots/plume-themes-settings.webp" alt="Settings with the theme gallery" width="880">
 <br><sub>Pick a theme, change fonts, sizes, widths and chart style, or write your own CSS.</sub>
 <br><br>
-<img src="docs/screenshots/plume-csv-viewer.webp" alt="CSV table viewer next to the folder library" width="880">
-<br><sub>Not only Markdown: CSV and TSV open as a sortable, filterable table.</sub>
+<img src="docs/screenshots/plume-csv-viewer.webp" alt="CSV opened in the spreadsheet grid" width="880">
+<br><sub>Not only Markdown: CSV and TSV open in a spreadsheet grid with formulas, sorting, filters and live selection stats.</sub>
 <br><br>
 <img src="docs/screenshots/plume-command-palette.webp" alt="The command palette" width="880">
 <br><sub>Everything is a command. <code>Ctrl+P</code> finds it.</sub>
@@ -84,7 +84,13 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 
 **More than Markdown**
 - Plain text, JSON, YAML, XML, HTML and code, with syntax highlighting and line numbers (CodeMirror 6)
-- CSV and TSV as a sortable, filterable table that stays fast on large files
+- CSV and TSV open in a real spreadsheet grid that fills the whole pane, like Excel:
+  - Edit cells in place, with a formula bar, undo and redo, copy and paste to and from Excel, fill down and right
+  - Formulas that recalculate as you type: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `ROUND`, text functions and more (your CSV keeps the formula text, so it opens anywhere)
+  - Sort, filter by column, resize columns, freeze the header row, insert and delete rows and columns, switch delimiter (comma, semicolon, tab, pipe)
+  - Selection stats at a glance: count, sum, average, min and max
+  - Fast on big files: a 100,000-row CSV opens in about a fifth of a second
+  - Saves back as plain text, and a file you only looked at is never changed
 - Images with zoom, pan and fit
 
 **Working with files**

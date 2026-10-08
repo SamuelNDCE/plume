@@ -102,6 +102,12 @@ export function init(app) {
   }
 
   function renderStats() {
+    // spreadsheets and images have no prose: word counts and reading time would be noise (the grid has its own stats)
+    if (app.state.mode === 'table' || app.state.mode === 'image') {
+      wordsEl.hidden = charsEl.hidden = readEl.hidden = cursorEl.hidden = true
+      return
+    }
+    wordsEl.hidden = false
     const selecting = selWords > 0
     wordsEl.textContent = selecting ? `${selWords} selected ${selWords === 1 ? 'word' : 'words'}` : `${stats.words} words`
     charsEl.hidden = selecting

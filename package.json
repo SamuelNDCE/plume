@@ -1,6 +1,6 @@
 {
   "name": "plume",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Plume: a free, open-source, fast viewer and editor for Markdown and plain text",
   "license": "MIT",
   "main": "electron/main.cjs",
