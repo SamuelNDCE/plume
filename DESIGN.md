@@ -4,9 +4,9 @@ Calm, quiet, premium (Linear / Bear / iA Writer feel), still light and fast. No 
 
 ## Files
 - `src/themes/themes.css`: colour tokens per theme plus the Crepe variable mapping.
-- `src/styles.css`: shell layout (rail, sidebar, header, canvas, statusbar), toasts, document typography, empty state, modes, print.
+- `src/styles.css`: shell layout (rail, sidebar, header, canvas, statusbar), toasts, document typography, empty state, modes, print. \*
 - `src/modules/modules.css`: overlay/module UI (palette, find, settings, statusbar contents). Tokens only.
-- `src/modules/header.js`: rail icons + wiring, breadcrumb, header actions; exports shared `ICONS`.
+- `src/modules/header.js`: rail icons + wiring, breadcrumb, header actions; exports shared `ICONS`. \*
 - `src/modules/empty.js`: empty-state view.
 
 ## Tokens
@@ -20,8 +20,8 @@ Exactly 8 built-ins. Light: light, github, newsprint, sepia. Dark: dark, nord, d
 `html[data-theme] .milkdown` rebinds every `--crepe-color-*` to a token (surface = bg-3, outline = border, primary/inline-code = accent, shadow-2 = shadow-lg).
 
 ## Layout
-`#rail` 48px icon rail (36px buttons, soft active pill + 3px indicator) | `#sidebar` (40px head with small-caps title, panes, library list: `.lib-section .lib-title .doc-row(.active .dirty) .doc-name .doc-close`, tree: `.tree-row .tree-folder .tree-file`, `.icon-btn`) | `#main`: `#header` 40px translucent (breadcrumb: last 2 folders muted, strong filename, unsaved dot; right: Rich/Source segmented control for md/table, Save when dirty, Find, Palette, Present, Settings) + `#doc` (one of `#editor-scroll`, `#cm-host`, `#viewer-host`, `#empty`) + `#statusbar` 26px.
-No tab bar: documents live in the sidebar library. Body classes: `zen` (hides rail/sidebar/header/statusbar), `no-sidebar` (rail stays), `mode-source`, `focus-mode` (inactive blocks 32%), `typewriter`.
+`#rail` 48px icon rail (36px buttons, soft active pill + 3px indicator) | `#sidebar` (40px head with small-caps title, panes, library list: `.lib-section .lib-title .doc-row(.active .dirty) .doc-name .doc-close`, tree: `.tree-row .tree-folder .tree-file`, `.icon-btn`) | `#main`: `#header` 40px translucent (breadcrumb: last 2 folders muted, strong filename, unsaved dot; right: Rich/Source segmented control for md/table, Save when dirty, Find, Palette, Present, Settings) + `#doc` (one of `#editor-scroll`, `#cm-host`, `#viewer-host`, `#empty`) + `#statusbar` 26px. \*
+No tab bar: documents live in the sidebar library. Body classes: `zen` (hides rail/sidebar/header/statusbar), `no-sidebar` (rail stays), `mode-source`, `focus-mode` (inactive blocks 32%), `typewriter`. \*
 The source editor owns undo and redo; its `Ctrl+Shift+Z` binding passes through the app shortcut filter to CodeMirror history.
 
 ## Typography
@@ -29,3 +29,11 @@ Doc font comes from the active theme (`html[data-font="theme"]`, the default); t
 
 ## Motion and print
 120ms hover transitions only; toasts ease in; all disabled under `prefers-reduced-motion`. Print shows only the document, black on white.
+
+> \*Corrected 2026-10-08: the 48px icon rail (`#rail`) was removed in 0.2.0. The sidebar now has two tabs, Files and Search (`#sidebar-tabs`), the sidebar toggle is the first button in the header, and `header.js` no longer wires a rail. `zen` hides sidebar, header and statusbar; `no-sidebar` hides the sidebar and its resizer.
+
+## Outline rail
+`#outline-mini` (built by `src/modules/outline.js`) floats at the left edge of `#doc`, top-aligned 20px below the header. One 18px-wide button per heading (up to 24): the line inside it gets longer and thicker with level (h1 18x4px, h2 13x3, h3 9x2, h4+ 6x1), muted, the heading in view uses `--accent`. Click jumps; hover or focus opens a card to the right (`--bg-3`, `--shadow-lg`) listing headings indented by level. Hidden unless the active view is rich Markdown (`body[data-view="wysiwyg"]`), and `#editor-scroll` gets 44px left padding while it is shown so text never sits under it.
+
+## Spreadsheet grid (CSV and TSV)
+`src/modules/sheet.js` over the pure logic in `sheet-core.js`. Fills `#viewer-host`; sticky column letters and row numbers, formula bar, one-row toolbar that overflows into a menu, status line with selection stats. Virtualised rows and columns; empty cells are drawn past the data with the same `--border` gridlines. Uses theme variables only (errors use `var(--danger, red)`).
