@@ -1,23 +1,11 @@
-// Status bar: file path, dirty dot, word/char/line counts, reading time, mode toggle, theme and font pickers.
-
-const THEMES = [
-  ['light', 'Light'],
-  ['dark', 'Dark'],
-  ['sepia', 'Sepia'],
-  ['nord', 'Nord'],
-  ['dracula', 'Dracula'],
-  ['midnight', 'Midnight'],
-  ['solarized-dark', 'Solarized dark'],
-  ['github', 'GitHub'],
-]
-const FONTS = [
-  ['serif', 'Serif'],
-  ['sans', 'Sans'],
-  ['mono', 'Mono'],
-]
+// Status bar: file path, dirty dot, file kind, word/char counts, reading time, cursor line (source),
+// and the view-mode toggle. Theme and font now live in the settings panel, not here.
 
 // CJK ideographs, kana and hangul: each character counts as one word.
-const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
+const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
+
+const KIND_LABEL = { md: 'Markdown', text: 'Plain text', table: 'Table', image: 'Image' }
+const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image' }
 
 // Plain text of a markdown document: fences, syntax and HTML removed, text kept.
 function stripMarkdown(md) {
@@ -51,64 +39,47 @@ export function computeStats(md) {
 export function init(app) {
   const $ = (s) => document.querySelector(s)
   const bar = $('#statusbar')
-  const source = $('#source')
   if (!bar) return
 
   /* ---------- build once ---------- */
   bar.textContent = ''
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag)
+    if (cls) n.className = cls
+    if (text != null) n.textContent = text
+    return n
+  }
+
   const left = el('div', 'sb-left')
   const pathEl = el('span', 'sb-path')
   const dirtyEl = el('span', 'sb-dirty')
   dirtyEl.title = 'Unsaved changes'
   dirtyEl.setAttribute('aria-label', 'Unsaved changes')
-  left.append(pathEl, dirtyEl)
+  const kindEl = el('span', 'sb-kind')
+  left.append(pathEl, dirtyEl, kindEl)
 
   const right = el('div', 'sb-right')
   const wordsEl = el('span', 'sb-stat sb-words')
   const charsEl = el('span', 'sb-stat sb-chars')
   const readEl = el('span', 'sb-stat sb-read')
-  const linesEl = el('span', 'sb-stat sb-lines')
+  const cursorEl = el('span', 'sb-stat sb-lines')
   const modeBtn = el('button', 'sb-mode')
   modeBtn.type = 'button'
   modeBtn.title = 'Toggle source mode (Ctrl+/)'
   modeBtn.addEventListener('click', () => app.actions.toggleSource())
 
-  const themeSel = select('sb-theme', THEMES, 'Theme', (v) => app.settings.set('theme', v))
-  const fontSel = select('sb-font', FONTS, 'Font', (v) => app.settings.set('fontFamily', v))
-
-  right.append(wordsEl, charsEl, readEl, linesEl, modeBtn, themeSel, fontSel)
+  right.append(wordsEl, charsEl, readEl, cursorEl, modeBtn)
   bar.append(left, right)
-
-  function el(tag, cls) {
-    const n = document.createElement(tag)
-    n.className = cls
-    return n
-  }
-
-  function select(cls, options, label, onPick) {
-    const s = el('select', cls)
-    s.setAttribute('aria-label', label)
-    for (const [value, text] of options) {
-      const o = document.createElement('option')
-      o.value = value
-      o.textContent = text
-      s.appendChild(o)
-    }
-    s.addEventListener('change', () => onPick(s.value))
-    return s
-  }
 
   /* ---------- state ---------- */
   let stats = computeStats('')
   let selWords = 0
   let docTimer = null
   let selFrame = 0
+  let codeHooked = false
 
   function selectionText() {
-    if (app.state.mode === 'source') {
-      if (source.selectionStart === source.selectionEnd) return ''
-      return source.value.slice(source.selectionStart, source.selectionEnd)
-    }
+    if (app.state.mode === 'source') return (app.code && app.code.getSelection()) || ''
     const sel = window.getSelection()
     const ed = document.getElementById('editor')
     if (!sel || sel.isCollapsed || !sel.anchorNode || !ed || !ed.contains(sel.anchorNode)) return ''
@@ -135,20 +106,32 @@ export function init(app) {
     readEl.hidden = selecting
     charsEl.textContent = `${stats.chars} characters`
     readEl.textContent = stats.words ? `${Math.max(1, Math.ceil(stats.words / 200))} min read` : '0 min read'
-    linesEl.hidden = app.state.mode !== 'source'
-    linesEl.textContent = `${stats.lines} lines`
+    const inSource = app.state.mode === 'source' && !!app.code
+    cursorEl.hidden = !inSource
+    if (inSource) cursorEl.textContent = `Ln ${app.code.cursorLine()} of ${app.code.lineCount()}`
+  }
+
+  // Source selection and cursor moves come from the code editor, once it exists.
+  function hookCode() {
+    if (codeHooked || !app.code) return
+    codeHooked = true
+    app.code.onSelection(() => onSelectionMaybeChanged())
   }
 
   function render() {
+    hookCode()
     const t = app.state.tabs[app.state.active]
     pathEl.textContent = t ? t.path || t.name : 'No file'
     pathEl.title = t && t.path ? t.path : ''
     dirtyEl.hidden = !(t && t.dirty)
-    const wys = app.state.mode !== 'source'
-    modeBtn.textContent = wys ? 'WYSIWYG' : 'Source'
-    modeBtn.setAttribute('aria-label', 'Editor mode: ' + (wys ? 'WYSIWYG' : 'Source') + '. Click to toggle.')
-    themeSel.value = app.settings.get('theme')
-    fontSel.value = app.settings.get('fontFamily')
+    kindEl.textContent = t ? KIND_LABEL[t.kind] || '' : ''
+    const mode = app.state.mode
+    const label = MODE_LABEL[mode] || ''
+    const toggles = mode === 'wysiwyg' || mode === 'source'
+    modeBtn.textContent = label
+    modeBtn.hidden = !label
+    modeBtn.disabled = !toggles
+    modeBtn.setAttribute('aria-label', 'View: ' + label + (toggles ? '. Click to toggle.' : ''))
     renderStats()
     updateSelection()
   }
@@ -167,13 +150,11 @@ export function init(app) {
   })
   app.bus.on('mode:change', () => render())
   app.bus.on('file:saved', () => render())
-  app.bus.on('settings:change', ({ key }) => {
-    if (key === 'theme' || key === 'fontFamily') render()
-  })
+  app.bus.on('editor:ready', () => render())
 
   document.addEventListener('selectionchange', onSelectionMaybeChanged)
-  source.addEventListener('select', onSelectionMaybeChanged)
 
-  stats = computeStats(app.state.tabs[app.state.active] ? app.state.tabs[app.state.active].content : '')
+  const current = app.state.tabs[app.state.active]
+  stats = computeStats(current ? current.content : '')
   render()
 }

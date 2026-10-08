@@ -137,9 +137,9 @@ export function init(app) {
   /* ----- insertion helpers ----- */
   function insertAtCursor(text) {
     if (app.state.mode === 'source') {
-      const ta = document.getElementById('source')
-      ta.focus()
-      document.execCommand('insertText', false, text)
+      if (!app.code) return app.toast('Open the source view first')
+      app.code.focus()
+      app.code.insert(text)
     } else {
       const el = pm()
       if (!el || el.getAttribute('contenteditable') === 'false') return app.toast('Editor is read-only')

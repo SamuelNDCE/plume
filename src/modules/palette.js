@@ -100,15 +100,14 @@ function headings() {
 
 function jumpToHeading(h, index) {
   if (app.state.mode === 'source') {
-    const ta = document.getElementById('source')
-    if (!ta) return
-    const lines = ta.value.split('\n')
+    const code = app.code
+    if (!code) return
+    const lines = code.getValue().split('\n')
     let pos = 0
     for (let i = 0; i < h.line && i < lines.length; i++) pos += lines[i].length + 1
-    ta.focus()
-    ta.setSelectionRange(pos, pos)
-    const lh = parseFloat(getComputedStyle(ta).lineHeight) || 20
-    ta.scrollTop = Math.max(0, h.line * lh - ta.clientHeight / 3)
+    code.selectRange(pos, pos)
+    code.scrollToLine(h.line + 1) // h.line is 0-based; the code editor API takes 1-based lines
+    code.focus()
     return
   }
   const pm = document.querySelector('#editor .ProseMirror')
@@ -157,8 +156,35 @@ function buildItems(rawQuery) {
     out.push({ kind: 'tab', label: t.name, meta: 'Tab', score: s - 1000, run: () => app.actions.switchTab(i) })
   })
 
+  const baseName = (p) => p.split(/[\\/]/).pop()
+  ;(app.recent ? app.recent() : []).forEach((p) => {
+    const name = baseName(p)
+    const s = bestScore(q, name)
+    if (s === null) return
+    out.push({ kind: 'recent', label: name, meta: 'Open Recent', score: s - 500, run: () => app.actions.openPath(p) })
+  })
+
+  // Go to file: only with a typed query, so the empty palette stays short.
+  if (q && app.state.folder) {
+    for (const f of flattenFiles(app.state.folder.children || [], '')) {
+      const s = bestScore(q, f.name, f.rel)
+      if (s === null) continue
+      out.push({ kind: 'file', label: f.name, meta: f.rel, score: s - 200, run: () => app.actions.openPath(f.path) })
+    }
+  }
+
   out.sort((a, b) => b.score - a.score)
   return out.slice(0, MAX_ITEMS)
+}
+
+// Files under a folder tree node list, depth first, with their path relative to the folder.
+function flattenFiles(nodes, prefix, acc = []) {
+  for (const n of nodes) {
+    if (acc.length >= 5000) break
+    if (n.dir) flattenFiles(n.children || [], prefix + n.name + '/', acc)
+    else acc.push({ name: n.name, path: n.path, rel: prefix + n.name })
+  }
+  return acc
 }
 
 function runItem(it) {

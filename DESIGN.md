@@ -1,25 +1,30 @@
-# Folio design
+# Plume design
 
-Calm, light, fast. No gradients, no heavy shadows, no JS in styling, system fonts only.
+Calm, quiet, premium (Linear / Bear / iA Writer feel), still light and fast. No gradients, no decoration for its own sake, system fonts only, hairline alpha borders, soft shadows only on raised surfaces.
 
 ## Files
-- `src/themes/themes.css`: all colour tokens per theme, plus the Crepe variable mapping.
-- `src/styles.css`: layout, tabs, typography, modes, print. Uses tokens only (exceptions: print, error red).
-- `src/modules/modules.css`: module UI, tokens only.
+- `src/themes/themes.css`: colour tokens per theme plus the Crepe variable mapping.
+- `src/styles.css`: shell layout (rail, sidebar, header, canvas, statusbar), toasts, document typography, empty state, modes, print.
+- `src/modules/modules.css`: overlay/module UI (palette, find, settings, statusbar contents). Tokens only.
+- `src/modules/header.js`: rail icons + wiring, breadcrumb, header actions; exports shared `ICONS`.
+- `src/modules/empty.js`: empty-state view.
 
-## Variable contract
-`--bg` page, `--bg-2` sidebar/tabbar/statusbar/popups, `--fg` text, `--fg-muted` secondary text, `--border` hairlines, `--accent` and `--accent-fg` (text on accent), `--hover` translucent hover wash, `--code-bg` code and inset surfaces, `--shadow` popup shadow, `--radius` corner radius (6px).
-Set by main.js: `--fs` (font size), `--doc-width` (column width). Derived in styles.css: `--doc-font`, `--mono-font`, `--ui-font`, `--t` (120ms).
+## Tokens
+`--bg` canvas, `--bg-2` rail/sidebar/statusbar, `--bg-3` raised surfaces (popups, pills, segmented control, inputs), `--fg`, `--fg-muted`, `--border` (alpha hairline), `--accent`, `--accent-fg`, `--hover` (translucent wash), `--code-bg`, `--shadow` (small), `--shadow-lg` (popups, toasts), `--ring` (focus ring), `--radius` (8px).
+Set by main.js: `--fs`, `--doc-width`, `--lh`. Derived in styles.css: `--doc-font`, `--mono-font`, `--ui-font`, `--t` (120ms), `--rail-w` (48px), `--header-h` (40px).
 
 ## Themes (`html[data-theme]`)
-Light: light, sepia, github. Dark: dark, nord, dracula, midnight, solarized-dark. Each block also sets `color-scheme`.
-To add a theme: add one `html[data-theme="name"]` block with all 11 tokens, add it to the settings list, and to `THEME_DARK` in main.js if dark. The Crepe mapping follows automatically.
+Light: light, sepia, github. Dark: dark, nord, dracula, midnight, solarized-dark. Hierarchy: bg-2 sits slightly darker than bg in dark themes and slightly off-white in light ones; bg-3 is the lightest/most raised surface. To add a theme: one block with all tokens above plus `color-scheme`, add it to settings and `THEME_DARK` in main.js.
 
 ## Crepe mapping
-Crepe sets its variables on `.milkdown`, so `html[data-theme] .milkdown` (higher specificity) rebinds every `--crepe-color-*` to a token: background=bg, surface=bg-2, surface-low/high=code-bg, outline=border, primary and inline-code=accent, hover=hover, selected=18% accent mix. Crepe fonts follow `--doc-font` / `--mono-font`.
-
-## Typography
-`html[data-font="sans|serif|mono"]` picks a system stack. Line-height 1.7. Headings 2 / 1.6 / 1.3 / 1.1 / 1 / .9em; h1 and h2 carry a hairline rule.
+`html[data-theme] .milkdown` rebinds every `--crepe-color-*` to a token (surface = bg-3, outline = border, primary/inline-code = accent, shadow-2 = shadow-lg).
 
 ## Layout
-Flex app: sidebar (inline width, 4px resizer) + main (34px tabbar, scrolling doc column, 24px statusbar). Body classes: `no-sidebar`, `mode-source`, `focus-mode` (inactive blocks at 35% opacity), `typewriter` (extra bottom padding). Motion: 120ms hover transitions only, disabled under `prefers-reduced-motion`. Print shows only the document, black on white.
+`#rail` 48px icon rail (36px buttons, soft active pill + 3px indicator) | `#sidebar` (40px head with small-caps title, panes, library list: `.lib-section .lib-title .doc-row(.active .dirty) .doc-name .doc-close`, tree: `.tree-row .tree-folder .tree-file`, `.icon-btn`) | `#main`: `#header` 40px translucent (breadcrumb: last 2 folders muted, strong filename, unsaved dot; right: Rich/Source segmented control for md/table, Save when dirty, Find, Palette, Present, Settings) + `#doc` (one of `#editor-scroll`, `#cm-host`, `#viewer-host`, `#empty`) + `#statusbar` 26px.
+No tab bar: documents live in the sidebar library. Body classes: `zen` (hides rail/sidebar/header/statusbar), `no-sidebar` (rail stays), `mode-source`, `focus-mode` (inactive blocks 32%), `typewriter`.
+
+## Typography
+Doc font via `html[data-font]` (sans/serif/mono), size `--fs`, line-height `--lh`. Headings 2.15 / 1.55 / 1.25 / 1.05em, tight negative tracking, no underline rules. Blockquote: thin accent bar, muted italic. Inline code: bordered pill. Tables: rounded, hairline rows, subtle zebra. HR: hairline.
+
+## Motion and print
+120ms hover transitions only; toasts ease in; all disabled under `prefers-reduced-motion`. Print shows only the document, black on white.

@@ -58,6 +58,17 @@ function renderedClone() {
   return clone
 }
 
+// Body for HTML export and copy. Source views, plain text and tables have no rendered DOM,
+// so they export as the escaped text in a <pre>. Returns null when there is nothing to export.
+function htmlBody() {
+  const d = app.state.tabs[app.state.active]
+  if (app.state.mode === 'source' || (d && (d.kind === 'text' || d.kind === 'table'))) {
+    return `<pre>${escHtml(app.getMarkdown() || '')}</pre>`
+  }
+  const clone = renderedClone()
+  return clone ? clone.innerHTML : null
+}
+
 function buildHtmlDoc(title, bodyHtml) {
   return [
     '<!doctype html>',
@@ -77,10 +88,9 @@ function buildHtmlDoc(title, bodyHtml) {
 }
 
 async function exportHtml() {
-  if (!ensureWysiwyg()) return
-  const clone = renderedClone()
-  if (!clone) return app.toast('Nothing to export yet')
-  const html = buildHtmlDoc(baseName(), clone.innerHTML)
+  const body = htmlBody()
+  if (body == null) return app.toast('Nothing to export yet')
+  const html = buildHtmlDoc(baseName(), body)
   const saved = await window.folio.exportHtml(html, suggest('html'))
   if (saved) app.toast('Exported HTML')
 }
@@ -101,11 +111,9 @@ async function copyMarkdown() {
 }
 
 async function copyHtml() {
-  if (!ensureWysiwyg()) return
-  const clone = renderedClone()
-  if (!clone) return app.toast('Nothing to copy yet')
-  const html = clone.innerHTML
-  const text = clone.textContent || ''
+  const html = htmlBody()
+  if (html == null) return app.toast('Nothing to copy yet')
+  const text = new DOMParser().parseFromString(html, 'text/html').body.textContent || ''
   try {
     if (navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
       await navigator.clipboard.write([

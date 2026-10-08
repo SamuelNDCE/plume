@@ -1,8 +1,8 @@
 // Find & replace bar (Ctrl+F find, Ctrl+H replace).
 // WYSIWYG: searches rendered text inside .ProseMirror, highlighted with the CSS Custom Highlight API.
 //   Replace goes through a Selection + execCommand('insertText') so ProseMirror records the edit.
-// Source: searches the #source textarea, selects matches with setSelectionRange, and replaces with
-//   setRangeText followed by an 'input' event so main.js picks the change up.
+// Source: searches app.code (CodeMirror wrapper), selects matches with selectRange, and replaces with
+//   replaceSelection. The editor's change listener in main.js picks the edit up.
 
 let app = null
 let bar = null
@@ -19,10 +19,13 @@ let wnodes = [] // WYSIWYG only: { node, start, len } for the last collection
 let cur = -1
 const state = { case: false, word: false, regex: false }
 
-const srcEl = () => document.getElementById('source')
 const pmEl = () => document.querySelector('#editor .ProseMirror')
 const hasHighlights = () => typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight !== 'undefined'
 const inSource = () => app.state.mode === 'source'
+// The code editor, only in source mode (app.code is null until the first source view).
+const codeEd = () => (inSource() && app.code) || null
+// 1-based line number of a character offset.
+const lineAt = (text, pos) => text.slice(0, pos).split('\n').length
 
 function el(tag, cls, text) {
   const n = document.createElement(tag)
@@ -153,8 +156,8 @@ function collect() {
   if (!re) return
   let text
   if (inSource()) {
-    const ta = srcEl()
-    text = ta ? ta.value : ''
+    const code = codeEd()
+    text = code ? code.getValue() : ''
   } else {
     const pm = pmEl()
     if (!pm) return
@@ -210,15 +213,11 @@ function revealWysiwyg() {
 }
 
 function selectSource() {
-  const ta = srcEl()
-  if (!ta || !matches[cur]) return
+  const code = codeEd()
+  if (!code || !matches[cur]) return
   const [s, e] = matches[cur]
-  ta.focus({ preventScroll: true })
-  ta.setSelectionRange(s, e)
-  const line = ta.value.slice(0, s).split('\n').length - 1
-  const lh = parseFloat(getComputedStyle(ta).lineHeight) || 20
-  const y = line * lh
-  if (y < ta.scrollTop || y > ta.scrollTop + ta.clientHeight - lh) ta.scrollTop = Math.max(0, y - ta.clientHeight / 3)
+  code.selectRange(s, e)
+  code.scrollToLine(lineAt(code.getValue(), s))
   findIn.focus({ preventScroll: true })
 }
 
@@ -286,23 +285,18 @@ function replacementFor(matched, re) {
   }
 }
 
-function fireSourceInput() {
-  const ta = srcEl()
-  if (ta) ta.dispatchEvent(new Event('input', { bubbles: true }))
-}
-
 function replaceOne() {
   if (!isOpen) return
   collect()
   if (!matches.length || invalid) return refresh(false)
   if (cur < 0 || cur >= matches.length) cur = 0
   const re = buildRegex()
-  if (inSource()) {
-    const ta = srcEl()
+  const code = codeEd()
+  if (code) {
     const [s, e] = matches[cur]
-    const rep = replacementFor(ta.value.slice(s, e), re)
-    ta.setRangeText(rep, s, e, 'end')
-    fireSourceInput()
+    const rep = replacementFor(code.getValue().slice(s, e), re)
+    code.selectRange(s, e)
+    code.replaceSelection(rep)
   } else {
     const r = rangeOf(matches[cur])
     if (!r) return
@@ -319,16 +313,16 @@ function replaceAll() {
   if (!matches.length || invalid) return refresh(false)
   const re = buildRegex()
   let count = 0
-  if (inSource()) {
-    const ta = srcEl()
-    const text = ta.value
-    // Work from the end so earlier offsets stay valid.
+  const code = codeEd()
+  if (code) {
+    const text = code.getValue()
+    // Work from the end so earlier offsets stay valid. Each replaceSelection is one undo step.
     for (let i = matches.length - 1; i >= 0; i--) {
       const [s, e] = matches[i]
-      ta.setRangeText(replacementFor(text.slice(s, e), re), s, e, 'preserve')
+      code.selectRange(s, e)
+      code.replaceSelection(replacementFor(text.slice(s, e), re))
       count++
     }
-    fireSourceInput()
   } else {
     // The DOM changes after each edit, so re-collect and continue after the inserted text.
     let from = 0
@@ -352,9 +346,8 @@ function replaceAll() {
 
 function selectedText() {
   if (inSource()) {
-    const ta = srcEl()
-    if (ta && ta.selectionStart !== ta.selectionEnd) return ta.value.slice(ta.selectionStart, ta.selectionEnd)
-    return ''
+    const code = codeEd()
+    return code ? code.getSelection() || '' : ''
   }
   return String(window.getSelection() || '')
 }
@@ -383,7 +376,7 @@ function close() {
     CSS.highlights.delete('folio-find')
     CSS.highlights.delete('folio-find-current')
   }
-  if (inSource()) srcEl()?.focus()
+  if (codeEd()) app.code.focus()
   else pmEl()?.focus()
 }
 

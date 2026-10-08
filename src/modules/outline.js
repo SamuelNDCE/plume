@@ -1,27 +1,45 @@
-// Outline: headings from the document as a nested, clickable list.
-// Headings are matched to the editor by document order (nth heading), in both modes.
+// Outline: headings of the open Markdown document as a nested, clickable list.
+// Rich view: built from the rendered h1-h6 elements, so the nth outline entry is the nth heading element.
+// Source view: built from the Markdown text (ATX headings) and jumps through app.code.
+// Other file kinds (plain text, tables, images) show an empty state.
 
 export function init(app) {
   const $ = (s) => document.querySelector(s)
   const pane = $('#outline-pane')
   const scroller = $('#editor-scroll')
-  const source = $('#source')
-  const editor = $('#editor')
-  if (!pane) return
+  if (!pane || !scroller) return
 
-  let headings = [] // { level, text, line, index, children }
-  let items = [] // outline row elements, by heading index
+  let headings = [] // { level, text, index, line (source only), children }
+  let items = [] // outline buttons, by heading index
   let current = -1
   let timer = null
   let frame = 0
+  let sig = null
+  let codeHooked = false
+
+  const emptyEl = (text) => {
+    const p = document.createElement('p')
+    p.className = 'outline-empty'
+    p.textContent = text
+    return p
+  }
 
   /* ---------- parsing ---------- */
+  // Strip inline markdown so the outline reads as plain text.
+  function cleanText(s) {
+    return s
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/(\*\*|__|\*|_|~~)/g, '')
+      .trim()
+  }
+
   // ATX headings only, outside fenced code blocks. Allows a blockquote prefix, as the editor does.
-  function parse(md) {
+  function parseMarkdown(md) {
     const out = []
-    const lines = (md || '').split('\n')
     let fence = null
-    lines.forEach((raw, line) => {
+    ;(md || '').split('\n').forEach((raw, line) => {
       const fm = raw.match(/^\s*(`{3,}|~{3,})/)
       if (fm) {
         if (!fence) fence = fm[1][0].repeat(fm[1].length)
@@ -36,14 +54,16 @@ export function init(app) {
     return out
   }
 
-  // Strip inline markdown so the outline reads as plain text.
-  function cleanText(s) {
-    return s
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/`([^`]*)`/g, '$1')
-      .replace(/(\*\*|__|\*|_|~~)/g, '')
-      .trim()
+  // Rendered headings, in document order.
+  function domHeadings() {
+    const pm = document.querySelector('#editor .ProseMirror')
+    if (!pm) return []
+    return [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((node, index) => ({
+      level: Number(node.tagName[1]),
+      text: node.textContent.replace(/\s+/g, ' ').trim(),
+      index,
+      children: [],
+    }))
   }
 
   // Nest by level: a heading is a child of the nearest preceding heading with a smaller level.
@@ -79,16 +99,12 @@ export function init(app) {
     }
   }
 
-  function render(md = currentMarkdown()) {
-    headings = parse(md)
+  function render() {
     items = []
     current = -1
     pane.textContent = ''
     if (!headings.length) {
-      const p = document.createElement('p')
-      p.className = 'outline-empty'
-      p.textContent = 'No headings yet. Headings you add will appear here.'
-      pane.appendChild(p)
+      pane.appendChild(emptyEl('No headings yet. Headings you add will appear here.'))
       return
     }
     const ul = document.createElement('ul')
@@ -98,44 +114,67 @@ export function init(app) {
     highlight()
   }
 
-  function currentMarkdown() {
-    return app.state.tabs[app.state.active] ? app.getMarkdown() : ''
+  function showEmpty(text) {
+    headings = []
+    sig = null
+    items = []
+    current = -1
+    pane.textContent = ''
+    pane.appendChild(emptyEl(text))
+  }
+
+  // Rebuild from the live document only when the heading list actually changed.
+  function build() {
+    const d = app.state.tabs[app.state.active]
+    if (!d) return showEmpty('Open a document to see its outline.')
+    if (d.kind !== 'md') return showEmpty('Outlines are for Markdown documents.')
+    let list
+    let mode
+    if (app.state.mode === 'source') {
+      mode = 'source'
+      list = parseMarkdown(app.getMarkdown())
+    } else if (app.state.mode === 'wysiwyg') {
+      mode = 'wysiwyg'
+      list = domHeadings()
+    } else {
+      return showEmpty('Outlines are for Markdown documents.')
+    }
+    const key = mode + '|' + list.map((h) => `${h.level}:${h.line ?? ''}:${h.text}`).join('\n')
+    if (key === sig) {
+      highlight()
+      return
+    }
+    sig = key
+    headings = list
+    render()
   }
 
   /* ---------- navigation ---------- */
-  function inSource() {
-    return app.state.mode === 'source'
+  function headingEls() {
+    const pm = document.querySelector('#editor .ProseMirror')
+    return pm ? [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')] : []
   }
 
   function goTo(h) {
-    if (inSource()) {
-      const lines = source.value.split('\n')
-      let off = 0
-      for (let i = 0; i < h.line && i < lines.length; i++) off += lines[i].length + 1
-      source.focus({ preventScroll: true })
-      source.setSelectionRange(off, off)
-      source.scrollTop = Math.max(0, (h.line / Math.max(1, lines.length)) * source.scrollHeight - 40)
+    if (app.state.mode === 'source') {
+      const code = app.code
+      if (!code || h.line == null) return
+      code.scrollToLine(h.line + 1) // h.line is 0-based; the code editor API takes 1-based lines
+      code.focus()
       return
     }
     const el = headingEls()[h.index]
     if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }
 
-  function headingEls() {
-    const pm = editor ? editor.querySelector('.ProseMirror') : null
-    return pm ? [...pm.querySelectorAll('h1,h2,h3,h4,h5,h6')] : []
-  }
-
-  // Index of the last heading that has reached the top of the viewport.
+  // Index of the last heading at or above the reading position.
   function computeCurrent() {
     if (!headings.length) return -1
-    if (inSource()) {
-      const total = Math.max(1, source.value.split('\n').length)
-      const pos = source.scrollTop
+    if (app.state.mode === 'source') {
+      if (!app.code) return -1
+      const line = app.code.cursorLine() - 1 // assumes cursorLine() is 1-based, like CodeMirror
       let idx = -1
-      for (const h of headings) {
-        if ((h.line / total) * source.scrollHeight <= pos + 40) idx = h.index
-      }
+      for (const h of headings) if (h.line <= line) idx = h.index
       return idx
     }
     const els = headingEls()
@@ -147,7 +186,16 @@ export function init(app) {
     return idx
   }
 
+  function hookCode() {
+    if (codeHooked || !app.code) return
+    codeHooked = true
+    app.code.onSelection(() => {
+      if (app.state.mode === 'source') highlight()
+    })
+  }
+
   function highlight() {
+    hookCode()
     const idx = computeCurrent()
     if (idx === current) return
     if (items[current]) items[current].classList.remove('current')
@@ -166,16 +214,16 @@ export function init(app) {
     })
   }
   scroller.addEventListener('scroll', onScroll, { passive: true })
-  source.addEventListener('scroll', onScroll, { passive: true })
 
-  app.bus.on('doc:change', (md) => {
+  /* ---------- wiring ---------- */
+  app.bus.on('doc:change', () => {
     clearTimeout(timer)
-    timer = setTimeout(() => {
-      render(md ?? '')
-    }, 200)
+    timer = setTimeout(build, 200)
   })
-  app.bus.on('tab:switch', () => render())
-  app.bus.on('mode:change', () => render())
+  app.bus.on('editor:ready', build)
+  app.bus.on('tab:switch', build)
+  app.bus.on('mode:change', build)
+  app.bus.on('empty:show', build)
 
-  render()
+  build()
 }
