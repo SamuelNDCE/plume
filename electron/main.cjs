@@ -145,10 +145,19 @@ ipcMain.handle('file:open-dialog', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: mdFilters })
   return r.canceled ? [] : r.filePaths
 })
-ipcMain.handle('file:read', (_e, p) => {
-  const buf = fs.readFileSync(p)
-  const d = textio.decode(buf)
-  return { path: p, name: path.basename(p), size: buf.length, binary: d.binary, content: d.content, encoding: d.encoding, eol: d.eol, mixedEol: d.mixedEol }
+// opts.maxBytes reads only the start of a file (the read-only preview of a very large one), cut back to a whole line.
+ipcMain.handle('file:read', (_e, p, opts = {}) => {
+  const size = fs.statSync(p).size
+  let buf
+  if (opts.maxBytes && size > opts.maxBytes) {
+    buf = Buffer.alloc(opts.maxBytes)
+    const fd = fs.openSync(p, 'r')
+    try { fs.readSync(fd, buf, 0, opts.maxBytes, 0) } finally { fs.closeSync(fd) }
+    const nl = buf.lastIndexOf(0x0a)
+    if (nl > 0) buf = buf.subarray(0, nl + 1)
+  } else buf = fs.readFileSync(p)
+  const d = opts.encoding ? textio.decodeAs(buf, opts.encoding) : textio.decode(buf)
+  return { path: p, name: path.basename(p), size, truncated: buf.length < size, binary: d.binary, content: d.content, encoding: d.encoding, eol: d.eol, mixedEol: d.mixedEol }
 })
 ipcMain.handle('file:create', (_e, dir, name) => {
   const dest = path.join(dir, name)
@@ -213,7 +222,8 @@ ipcMain.handle('folder:tree', (_e, dir) => ({ root: dir, name: path.basename(dir
 ipcMain.handle('file:reveal', (_e, p) => shell.showItemInFolder(p))
 ipcMain.handle('file:stat', (_e, p) => {
   try {
-    return { mtimeMs: fs.statSync(p).mtimeMs }
+    const st = fs.statSync(p)
+    return { mtimeMs: st.mtimeMs, size: st.size }
   } catch {
     return null
   }

@@ -50,9 +50,12 @@ function filterKeymap(bindings) {
 
 const isMarkdown = (name) => /\.(md|markdown|mdown|mkd|mdx)$/i.test(name || '')
 
-export function createCodeEditor(host, { onChange } = {}) {
-  const opts = { dark: false, fontSize: 14, lineNumbers: true, wrap: true }
+export function createCodeEditor(host, { onChange, onLanguage } = {}) {
+  const opts = { dark: false, fontSize: 14, lineNumbers: true, wrap: true, spellcheck: false, readOnly: false }
   const cLang = new Compartment()
+  const cSpell = new Compartment()
+  const cRO = new Compartment()
+  let langName = null
   const cTheme = new Compartment()
   const cFont = new Compartment()
   const cNums = new Compartment()
@@ -71,6 +74,8 @@ export function createCodeEditor(host, { onChange } = {}) {
     })
   const numsExt = () => (opts.lineNumbers ? lineNumbers() : [])
   const wrapExt = () => (opts.wrap ? EditorView.lineWrapping : [])
+  // Spellcheck is on only for prose files (decided by the caller); code never gets red underlines.
+  const spellExt = () => EditorView.contentAttributes.of({ spellcheck: opts.spellcheck ? 'true' : 'false' })
 
   const chrome = EditorView.theme({
     '&': { height: '100%', backgroundColor: 'transparent', color: 'var(--fg)' },
@@ -152,6 +157,10 @@ export function createCodeEditor(host, { onChange } = {}) {
         cTheme.of(themeExt()),
         cFont.of(fontExt()),
         cWrap.of(wrapExt()),
+        cSpell.of(spellExt()),
+        cRO.of(EditorState.readOnly.of(!!opts.readOnly)),
+        // Belt and braces: a read-only preview rejects every edit, typed or programmatic, whatever state the compartment is in.
+        EditorState.transactionFilter.of((tr) => (opts.readOnly && tr.docChanged && !tr.annotation(programmatic) ? [] : tr)),
         cLang.of([]),
         updater,
       ],
@@ -161,7 +170,9 @@ export function createCodeEditor(host, { onChange } = {}) {
 
   function loadLanguage(filename, token) {
     if (isMarkdown(filename)) {
+      langName = 'Markdown'
       view.dispatch({ effects: cLang.reconfigure(markdown({ codeLanguages: languages })), annotations: programmatic.of(true) })
+      if (onLanguage) onLanguage(langName)
       return
     }
     const desc = filename ? LanguageDescription.matchFilename(languages, filename) : null
@@ -170,7 +181,9 @@ export function createCodeEditor(host, { onChange } = {}) {
       .load()
       .then((support) => {
         if (token !== docToken) return
+        langName = desc.name
         view.dispatch({ effects: cLang.reconfigure(support), annotations: programmatic.of(true) })
+        if (onLanguage) onLanguage(langName)
       })
       .catch((e) => console.warn('[code] language load failed', e))
   }
@@ -179,14 +192,17 @@ export function createCodeEditor(host, { onChange } = {}) {
     view,
     setDoc(text, filename) {
       const token = ++docToken
+      langName = null
       view.setState(makeState(text || ''))
       loadLanguage(filename, token)
     },
     getValue: () => view.state.doc.toString(),
+    languageName: () => langName,
     setValue(t) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: t || '' } })
     },
     insert(t) {
+      if (opts.readOnly) return
       view.dispatch(view.state.replaceSelection(t), { scrollIntoView: true, userEvent: 'input' })
     },
     getSelection() {
@@ -194,6 +210,7 @@ export function createCodeEditor(host, { onChange } = {}) {
       return view.state.sliceDoc(r.from, r.to)
     },
     replaceSelection(t) {
+      if (opts.readOnly) return
       view.dispatch(view.state.replaceSelection(t), { scrollIntoView: true, userEvent: 'input' })
     },
     selectRange(from, to) {
@@ -232,6 +249,14 @@ export function createCodeEditor(host, { onChange } = {}) {
       if (o.wrap !== undefined && !!o.wrap !== opts.wrap) {
         opts.wrap = !!o.wrap
         effects.push(cWrap.reconfigure(wrapExt()))
+      }
+      if (o.readOnly !== undefined && !!o.readOnly !== !!opts.readOnly) {
+        opts.readOnly = !!o.readOnly
+        effects.push(cRO.reconfigure(EditorState.readOnly.of(opts.readOnly)))
+      }
+      if (o.spellcheck !== undefined && !!o.spellcheck !== opts.spellcheck) {
+        opts.spellcheck = !!o.spellcheck
+        effects.push(cSpell.reconfigure(spellExt()))
       }
       if (effects.length) view.dispatch({ effects })
     },

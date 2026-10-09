@@ -113,9 +113,41 @@ function encode(text, encoding = 'utf-8', eol = 'lf') {
       for (const ch of s) bytes.push(map.has(ch) ? map.get(ch) : 0x3f)
       return Buffer.from(bytes)
     }
-    default:
+    default: {
+      if (SINGLE_BYTE.includes(encoding)) {
+        const map = reverseSingleByte(encoding)
+        const bytes = []
+        for (const ch of s) bytes.push(map.has(ch) ? map.get(ch) : 0x3f)
+        return Buffer.from(bytes)
+      }
+      if (MULTI_BYTE_READ_ONLY.includes(encoding)) throw new Error(`Saving as ${encoding} is not supported. Use Save As with UTF-8.`)
       return Buffer.from(s, 'utf8')
+    }
   }
 }
 
-module.exports = { decode, encode, ENCODINGS, EOLS }
+// Reopen with a chosen code page. Single-byte pages can also be saved (the encoder is the decoder run backwards).
+// Multi-byte pages can be reopened but not saved: there is no reliable encoder for them in this build.
+const SINGLE_BYTE = ['windows-1250', 'windows-1251', 'windows-1253', 'koi8-r', 'iso-8859-2', 'iso-8859-5']
+const MULTI_BYTE_READ_ONLY = ['shift_jis', 'gbk', 'big5', 'euc-kr']
+const reverseMaps = new Map()
+function reverseSingleByte(label) {
+  if (reverseMaps.has(label)) return reverseMaps.get(label)
+  const dec = new TextDecoder(label)
+  const map = new Map()
+  for (let b = 0; b < 256; b++) {
+    const ch = dec.decode(Uint8Array.of(b))
+    if (!map.has(ch)) map.set(ch, b)
+  }
+  reverseMaps.set(label, map)
+  return map
+}
+
+// Decode with an explicit code page (the user chose it). Keeps the same line-ending detection as decode().
+function decodeAs(buf, label) {
+  const text = new TextDecoder(label).decode(buf)
+  const { eol, mixed } = detectEol(text)
+  return { binary: false, content: normalizeEol(text), encoding: label, eol, mixedEol: mixed }
+}
+
+module.exports = { decode, decodeAs, encode, ENCODINGS, EOLS, SINGLE_BYTE, MULTI_BYTE_READ_ONLY }

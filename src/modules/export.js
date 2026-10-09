@@ -95,9 +95,36 @@ async function exportHtml() {
   if (saved) app.toast('Exported HTML')
 }
 
+// The source view is virtualised by CodeMirror: only the lines on screen exist in the DOM, so printing the page would
+// print only those. Print and PDF therefore use a plain copy of the whole text, shown only in print media.
+const SHEET_ID = 'print-sheet'
+function makeSheet() {
+  const sheet = document.createElement('pre')
+  sheet.id = SHEET_ID
+  sheet.textContent = app.getMarkdown() || ''
+  document.body.appendChild(sheet)
+  document.body.classList.add('print-sheet-on')
+  return sheet
+}
+function dropSheet(sheet) {
+  document.body.classList.remove('print-sheet-on')
+  sheet.remove()
+}
+const nextPaint = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+
 async function exportPdf() {
-  if (!ensureWysiwyg()) return
-  const saved = await window.folio.exportPdf(suggest('pdf'))
+  const text = app.state.mode === 'source'
+  if (!text && !ensureWysiwyg()) return
+  let saved
+  if (text) {
+    const sheet = makeSheet()
+    try {
+      await nextPaint()
+      saved = await window.folio.exportPdf(suggest('pdf'))
+    } finally {
+      dropSheet(sheet)
+    }
+  } else saved = await window.folio.exportPdf(suggest('pdf'))
   if (saved) app.toast('Exported PDF')
 }
 
@@ -132,6 +159,14 @@ async function copyHtml() {
 }
 
 function printDoc() {
+  if (app.state.mode !== 'source') return window.print()
+  const sheet = makeSheet()
+  // afterprint fires when the dialog closes (print or cancel), which is the only safe time to drop the sheet
+  const done = () => {
+    window.removeEventListener('afterprint', done)
+    dropSheet(sheet)
+  }
+  window.addEventListener('afterprint', done)
   window.print()
 }
 
@@ -143,4 +178,6 @@ export function init(appCtx) {
   C('export.markdown.copy', 'Copy as Markdown', copyMarkdown)
   C('export.html.copy', 'Copy as HTML', copyHtml)
   C('export.print', 'Print…', printDoc)
+  // exposed for the QA hook: build the print copy, check it, then drop it
+  app.printSheet = { make: makeSheet, drop: dropSheet }
 }
