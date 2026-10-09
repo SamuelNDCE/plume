@@ -153,7 +153,7 @@ npm install
 npm start
 ```
 
-Needs [Node.js](https://nodejs.org) 20 or newer. To make an installer for your system:
+Needs [Node.js](https://nodejs.org) 20.19 or newer (or 22.12 or newer). To make an installer for your system:
 
 ```bash
 npm run dist
