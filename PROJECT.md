@@ -1,6 +1,6 @@
 # Plume: project rules
 
-Free, open-source (MIT) Markdown editor and viewer. Electron + Vite, vanilla JS. Milkdown (rich), CodeMirror 6 (source), Mermaid (lazy). Current version in `package.json` (0.3.0 at 2026-10-08).
+Free, open-source (MIT) Markdown editor and viewer. Electron + Vite, vanilla JS. Milkdown (rich), CodeMirror 6 (source), Mermaid (lazy). Current version in `package.json` (0.4.0 at 2026-10-09).
 
 ## Run and build
 - `npm install`, then `npm start` (builds the renderer, launches Electron). Dev: `npm run dev`, then `VITE_DEV_URL=http://localhost:5199 npm run app`.

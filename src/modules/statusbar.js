@@ -31,8 +31,9 @@ export function countText(text) {
   return { words: cjk + latin, chars: text.replace(/\s/g, '').length }
 }
 
-export function computeStats(md) {
-  const text = stripMarkdown(md || '')
+// markdown=false for plain text: its syntax is not markup, so stripping it only costs time on large files
+export function computeStats(md, markdown = true) {
+  const text = markdown ? stripMarkdown(md || '') : md || ''
   const { words, chars } = countText(text)
   return { words, chars, lines: (md || '').split('\n').length }
 }
@@ -181,15 +182,16 @@ export function init(app) {
   }
 
   /* ---------- events ---------- */
+  const isMd = (t) => !t || t.kind === 'md'
   app.bus.on('doc:change', (md) => {
     clearTimeout(docTimer)
     docTimer = setTimeout(() => {
-      stats = computeStats(md ?? '')
+      stats = computeStats(md ?? '', isMd(app.state.tabs[app.state.active]))
       render()
     }, 150)
   })
   app.bus.on('tab:switch', (t) => {
-    stats = computeStats(t ? t.content : '')
+    stats = computeStats(t ? t.content : '', isMd(t))
     render()
   })
   app.bus.on('mode:change', () => render())

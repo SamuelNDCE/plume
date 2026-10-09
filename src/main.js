@@ -30,8 +30,9 @@ let autosaveTimer = null
 let mountToken = 0
 
 // Text files above FULL_OPEN_MAX open as a read-only preview of their first PREVIEW_BYTES.
-// Measured 2026-10-09: 10 MB opened in 0.45 s, 50 MB in 2.0 s, 150 MB did not finish in four minutes.
-const FULL_OPEN_MAX = 50 * 1024 * 1024
+// Measured 2026-10-09 (full open): 10 MB in 0.45 s, 50 MB in 2.0 s, 105 MB in 6.8 s with about 1.2 GB of renderer heap.
+// Larger files are not opened in full: that heap cost grows with size, and 150 MB was not measured cleanly.
+const FULL_OPEN_MAX = 128 * 1024 * 1024
 const PREVIEW_BYTES = 5 * 1024 * 1024
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
