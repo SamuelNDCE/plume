@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron')
 const fs = require('node:fs')
+const textio = require('./textio.cjs')
 const path = require('node:path')
 
 const isDev = !!process.env.VITE_DEV_URL
@@ -146,8 +147,8 @@ ipcMain.handle('file:open-dialog', async () => {
 })
 ipcMain.handle('file:read', (_e, p) => {
   const buf = fs.readFileSync(p)
-  const binary = buf.subarray(0, 8000).includes(0)
-  return { path: p, name: path.basename(p), size: buf.length, binary, content: binary ? '' : buf.toString('utf8') }
+  const d = textio.decode(buf)
+  return { path: p, name: path.basename(p), size: buf.length, binary: d.binary, content: d.content, encoding: d.encoding, eol: d.eol, mixedEol: d.mixedEol }
 })
 ipcMain.handle('file:create', (_e, dir, name) => {
   const dest = path.join(dir, name)
@@ -196,8 +197,8 @@ ipcMain.handle('folder:search', (_e, dir, query, opts = {}) => {
   walk(dir, 0)
   return out
 })
-ipcMain.handle('file:write', (_e, p, content) => {
-  fs.writeFileSync(p, content, 'utf8')
+ipcMain.handle('file:write', (_e, p, content, fmt = {}) => {
+  fs.writeFileSync(p, textio.encode(content, fmt.encoding, fmt.eol))
   return true
 })
 ipcMain.handle('file:save-dialog', async (_e, suggested) => {

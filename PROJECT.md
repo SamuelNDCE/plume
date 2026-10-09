@@ -9,6 +9,7 @@ Free, open-source (MIT) Markdown editor and viewer. Electron + Vite, vanilla JS.
 
 ## Verify before claiming anything works
 - Spreadsheet logic: `node --test test/sheet-core.test.mjs` (use the file path; the directory form fails on Node 24).
+- Text file handling (encoding, line endings): `node --test test/textio.test.mjs`.
 - Source-view shortcuts: build, then `npx electron tests/source-redo.cjs`.
 - Real-app QA hook in `electron/main.cjs`: `PLUME_SMOKE=<png>` (screenshot, prints `ERRORS:[...]`, must be `[]`), or `PLUME_STEPS=<json>` with `PLUME_SHOT_DIR` to type keys, move the mouse, click, run JS and take screenshots (`window.__plume` is the app object). Stop stray Electron windows and clear `%APPDATA%\plume\Local Storage` first, or runs share state with a leftover window.
 - UI work is not done until it has been run in the real app and screenshotted. Build unminified (`vite build --minify false`) to read a minified startup error.
@@ -30,4 +31,4 @@ Free, open-source (MIT) Markdown editor and viewer. Electron + Vite, vanilla JS.
 - Contributors: review a PR by running its test on the fixed and the unfixed code before merging.
 
 ## Deferred on purpose
-PDF (#8), Word (#9) and Excel (#10) support, a Settings Updates section (#12), and a one-click installer with an in-app updating screen (#13). Signing is parked (#1).
+PDF (#8), Word (#9) and Excel (#10) support. Signing is parked (#1). Done 2026-10-09: update controls in Settings, About and the in-app update screen (#12, #13), one-click per-user Windows installer, Notepad-style text handling (encoding and line endings preserved, Go to line, date and time).

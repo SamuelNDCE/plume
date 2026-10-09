@@ -485,11 +485,6 @@ export function init(app) {
   function secFiles() {
     const g = group('Saving')
     g.appendChild(toggle('autosave', 'Autosave', 'Save changes automatically after you stop typing.'))
-    const gu = group('Updates')
-    gu.append(
-      toggle('checkUpdates', 'Check for updates on launch', 'Plume asks GitHub once at startup whether a newer version exists. Turn off for zero network activity.'),
-      row('Check now', 'Look for a new version right away. Installed copies can update in one click.', btn('Check now', '', () => app.commands.run('update.check')))
-    )
     const g2 = group('Data')
     g2.append(
       row('Clear recent files', 'Forget the list of recently opened files.', btn('Clear', '', () => {
@@ -508,7 +503,7 @@ export function init(app) {
       }))
     )
     const f = el('div')
-    f.append(g, gu, g2)
+    f.append(g, g2)
     return f
   }
 
@@ -560,6 +555,76 @@ export function init(app) {
     return f
   }
 
+  function secUpdates() {
+    const f = el('div')
+    const g = group('Updates')
+    const statusEl = el('div', 'st-update-status')
+    statusEl.setAttribute('role', 'status')
+    statusEl.setAttribute('aria-live', 'polite')
+    const detailEl = el('div', 'st-desc')
+    const bar = el('div', 'update-bar')
+    const fill = el('div', 'update-fill')
+    bar.appendChild(fill)
+    const checkBtn = btn('Check for updates', '', () => app.updates && app.updates.check())
+    const goBtn = btn('Update now', 'primary', () => app.updates && app.updates.start())
+    const restartBtn = btn('Restart and install', 'primary', () => app.updates && app.updates.install())
+    const actions = el('div', 'st-update-actions')
+    actions.append(goBtn, restartBtn, checkBtn)
+    const box = el('div', 'st-update-box')
+    box.append(statusEl, detailEl, bar, actions)
+    g.appendChild(box)
+
+    const when = (t) => {
+      if (!t) return 'Not checked yet in this install.'
+      const mins = Math.round((Date.now() - t) / 60000)
+      const rel = mins < 1 ? 'just now' : mins < 60 ? mins + ' min ago' : mins < 1440 ? Math.round(mins / 60) + ' h ago' : Math.round(mins / 1440) + ' days ago'
+      return 'Last checked ' + rel + ' (' + new Date(t).toLocaleString() + ').'
+    }
+    const sync = () => {
+      const u = app.updates
+      const s = (u && u.state()) || {}
+      const cur = s.current || ''
+      const st = s.state || 'idle'
+      let status = cur ? 'Plume ' + cur : 'Plume'
+      let detail = u ? when(u.lastChecked()) : 'Updates are not available in this build.'
+      if (st === 'checking') status = 'Checking for updates…'
+      else if (st === 'available') {
+        status = 'Plume ' + s.version + ' is available'
+        detail = 'You have ' + cur + '. ' + (s.canInstall ? 'Update now downloads it, saves your documents and restarts Plume.' : 'This copy cannot update itself; Update now opens the download page.')
+      } else if (st === 'downloading') {
+        status = 'Updating to ' + (s.version || 'the new version') + '… ' + (s.percent || 0) + '%'
+        detail = 'Your documents stay open and are saved before the restart.'
+      } else if (st === 'ready') {
+        status = 'Plume ' + s.version + ' is ready to install'
+        detail = 'Restart to finish. Your documents are saved first.'
+      } else if (st === 'error') {
+        status = 'The last update check failed'
+        detail = (s.error || 'Unknown error') + ' ' + when(u && u.lastChecked())
+      } else if (st === 'none') {
+        status = 'You are up to date'
+        detail = 'Plume ' + cur + '. ' + (s.note || when(u && u.lastChecked()))
+      } else if (cur) detail = 'Plume ' + cur + '. ' + detail
+      statusEl.textContent = status
+      detailEl.textContent = detail
+      bar.hidden = st !== 'downloading'
+      fill.style.width = (s.percent || 0) + '%'
+      goBtn.hidden = st !== 'available'
+      goBtn.textContent = s.canInstall === false ? 'Open download page' : 'Update now'
+      restartBtn.hidden = st !== 'ready'
+      checkBtn.disabled = st === 'checking' || st === 'downloading'
+    }
+    refreshers.push(sync)
+    if (app.updates) {
+      cleanups.push(app.updates.onChange(sync))
+      app.updates.refresh()
+    }
+
+    const g2 = group('Checking')
+    g2.appendChild(toggle('checkUpdates', 'Check for updates on launch', 'Plume asks GitHub once at startup whether a newer version exists. Turn off for zero network activity. Nothing is sent but the request itself.'))
+    f.append(g, g2)
+    return f
+  }
+
   function secAbout() {
     const f = el('div', 'st-about')
     const logo = el('img', 'st-logo-img')
@@ -574,6 +639,7 @@ export function init(app) {
     try {
       window.folio.getUpdateState().then((u) => { ver.textContent = 'Version ' + (u && u.current ? u.current : '') })
     } catch {}
+    f.appendChild(secUpdates())
     f.appendChild(el('p', null, 'Free and open source. No telemetry.'))
     f.appendChild(el('div', 'st-muted', 'Released under the MIT licence.'))
     f.appendChild(btn('View on GitHub', '', () => window.open('https://github.com/SamuelNDCE/plume')))

@@ -115,8 +115,9 @@
       "artifactName": "Plume-${version}-${os}-${arch}.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
       "artifactName": "Plume-${version}-win-x64-setup.${ext}"
     },
     "portable": {

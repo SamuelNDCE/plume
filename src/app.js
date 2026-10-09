@@ -8,7 +8,7 @@
 //   app.getMarkdown() / app.setMarkdown(md)   current document text, either mode
 //   app.state: { tabs, active (index), folder (tree|null), mode }
 //   app.actions: newTab openFile openPath save saveAs saveAll closeTab(i) toggleSource openFolder refreshFolder switchTab(i) retarget(old,new) render
-//   app.code: CodeMirror wrapper (null until first source view). API: view setDoc(text,filename) getValue() setValue(t) insert(t) getSelection() replaceSelection(t) selectRange(from,to) scrollToLine(n) cursorLine() lineCount() setOptions({dark,fontSize,lineNumbers,wrap}) focus() onSelection(cb)
+//   app.code: CodeMirror wrapper (null until first source view). API: view setDoc(text,filename) getValue() setValue(t) insert(t) getSelection() replaceSelection(t) selectRange(from,to) scrollToLine(n) cursorLine() cursorCol() lineCount() setOptions({dark,fontSize,lineNumbers,wrap}) focus() onSelection(cb)
 //   app.recent() -> recent file paths.  tab doc shape: {name,kind:'md'|'text'|'table'|'image',view:'rich'|'source',path,content,saved,dirty,dataUrl?}
 //   app.state.mode: 'wysiwyg'|'source'|'table'|'image'|'empty'.  extra events: 'editor:ready' 'empty:show'
 //   app.toast(msg)

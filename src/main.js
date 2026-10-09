@@ -33,6 +33,8 @@ const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
 const MD_RE = /\.(md|markdown|mdown|mkd)$/i
 const baseName = (p) => p.split(/[\\/]/).pop()
 const dirName = (p) => p.slice(0, Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')))
+// A new text file ends lines the way the platform does (Notepad writes CRLF on Windows); Markdown stays LF.
+const defaultEol = (kind) => (kind === 'text' && /Win/i.test(navigator.platform) ? 'crlf' : 'lf')
 const kindOf = (name) => (MD_RE.test(name) ? 'md' : IMG_RE.test(name) ? 'image' : /\.(csv|tsv)$/i.test(name) ? 'table' : 'text')
 const doc = () => app.state.tabs[app.state.active]
 
@@ -324,7 +326,7 @@ async function openPath(p) {
     } else {
       const f = await api.readFile(p)
       if (f.binary) return app.toast(`${name} is a binary file`)
-      d = { name, kind, view: 'rich', path: p, content: f.content, saved: f.content, dirty: false }
+      d = { name, kind, view: 'rich', path: p, content: f.content, saved: f.content, dirty: false, encoding: f.encoding || 'utf-8', eol: f.eol || defaultEol(kind), mixedEol: !!f.mixedEol }
     }
     d.mtime = st?.mtimeMs
     // replace a pristine empty untitled doc
@@ -348,7 +350,7 @@ async function saveDoc(d, forceAs = false) {
     p = await api.saveDialog(d.path || d.name)
     if (!p) return false
   }
-  await api.writeFile(p, d.content)
+  await api.writeFile(p, d.content, { encoding: d.encoding || 'utf-8', eol: d.eol || defaultEol(kindOf(baseName(p))) })
   d.path = p
   d.name = baseName(p)
   d.kind = kindOf(d.name) === 'image' ? 'text' : kindOf(d.name)
@@ -471,7 +473,7 @@ async function restoreSession() {
           else {
             const f = await api.readFile(t.path)
             if (f.binary) continue
-            app.state.tabs.push({ ...t, content: f.content, saved: f.content, mtime: (await api.stat(t.path))?.mtimeMs })
+            app.state.tabs.push({ ...t, content: f.content, saved: f.content, encoding: f.encoding || 'utf-8', eol: f.eol || t.eol || defaultEol(t.kind), mixedEol: !!f.mixedEol, mtime: (await api.stat(t.path))?.mtimeMs })
           }
         } catch {}
       } else if (t.kind !== 'image') app.state.tabs.push({ ...t })
@@ -492,6 +494,8 @@ async function checkExternal() {
       const f = await api.readFile(d.path)
       if (f.content !== d.saved) {
         d.content = d.saved = f.content
+        d.encoding = f.encoding || d.encoding
+        d.eol = f.eol || d.eol
         d.mtime = st.mtimeMs
         await render()
         app.toast('Reloaded — file changed on disk')
@@ -515,6 +519,17 @@ app.actions = {
   switchTab: activate,
   retarget,
   render,
+  // Change how the file will be written (line ending / encoding). The text itself is unchanged.
+  setFormat(fmt = {}) {
+    const d = doc()
+    if (!d || d.kind === 'image') return
+    if (fmt.eol) { d.eol = fmt.eol; d.mixedEol = false }
+    if (fmt.encoding) d.encoding = fmt.encoding
+    d.dirty = true
+    app.bus.emit('tab:list', app.state.tabs)
+    app.bus.emit('file:format', d)
+    scheduleAutosave()
+  },
 }
 
 /* ---------- settings application ---------- */
@@ -685,6 +700,7 @@ async function boot() {
       import('./modules/settings.js'),
       import('./modules/search.js'),
       import('./modules/updates.js'),
+      import('./modules/texttools.js'),
     ])
     for (const m of mods) {
       try {
