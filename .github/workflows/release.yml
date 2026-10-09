@@ -69,7 +69,7 @@ jobs:
         working-directory: assets
         run: sha256sum Plume-* > SHA256SUMS.txt
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: 'assets/Plume-*'
       - name: Create release
