@@ -1,5 +1,7 @@
 # Code signing Plume
 
+> **Status 2026-10-09: postponed.** Plume is a free personal project, so the paid options (Azure Artifact Signing, an OV certificate, Apple Developer ID) are not being pursued. The free route is SignPath Foundation for Windows, to be applied for once the project has traction. Releases stay unsigned; the README has a first-run note and every release ships checksums and a build attestation.
+
 Unsigned Windows installers show the blue "Windows protected your PC" screen with **Unknown publisher**. Signing replaces "Unknown publisher" with a real name. Read the first section before choosing, because it sets expectations.
 
 ## What signing does and does not do

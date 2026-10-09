@@ -44,6 +44,12 @@ Plume opens a file instantly, lets you write in rich text without ever seeing th
 
 Updates are built in: when a new version is out, Plume tells you and you click once to install it (see [Updates](#updates)). Builds are not code-signed yet, so your system may show a warning the first time; see [Is it safe?](#is-it-safe).
 
+**First run.** Plume is not code-signed yet (signing is postponed, see [#1](https://github.com/SamuelNDCE/plume/issues/1)), so your system may warn you once:
+
+- **Windows:** on the blue "Windows protected your PC" screen, click **More info**, then **Run anyway**.
+- **macOS:** open **System Settings, Privacy & Security**, find the message about Plume under Security, click **Open Anyway** and enter your password. The button is available for about an hour after the first launch attempt.
+- **Linux:** no signing warning; mark the AppImage as executable first (`chmod +x`).
+
 ## See it
 
 <div align="center">
