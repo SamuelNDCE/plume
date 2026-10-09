@@ -58,7 +58,18 @@ function splitSlides(md) {
     else cur.push(l)
   }
   slides.push(cur.join('\n'))
-  return slides.filter((s) => s.trim())
+  if (slides.length > 1) return slides.filter((s) => s.trim())
+  // No --- separators: every level 1 or 2 heading starts a new slide, so a document of headings still presents.
+  const byHeading = []
+  cur = []
+  fenced = false
+  for (const l of md.split('\n')) {
+    if (/^\s*```/.test(l)) fenced = !fenced
+    if (!fenced && /^#{1,2}\s/.test(l) && cur.join('').trim()) (byHeading.push(cur.join('\n')), (cur = []))
+    cur.push(l)
+  }
+  byHeading.push(cur.join('\n'))
+  return byHeading.filter((s) => s.trim())
 }
 
 export function init(app) {

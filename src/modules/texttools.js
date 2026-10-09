@@ -5,6 +5,19 @@
 export const EOL_LABEL = { crlf: 'CRLF', lf: 'LF', cr: 'CR' }
 export const EOL_NAME = { crlf: 'Windows (CRLF)', lf: 'Unix (LF)', cr: 'Classic Mac (CR)' }
 export const ENC_LABEL = { 'utf-8': 'UTF-8', 'utf-8-bom': 'UTF-8 with BOM', 'utf-16le': 'UTF-16 LE', 'utf-16be': 'UTF-16 BE', 'windows-1252': 'ANSI (Windows-1252)' }
+// Code pages a file can be reopened as. Multi-byte ones open read-only (saving them is refused).
+export const REOPEN = [
+  ['windows-1251', 'Cyrillic (Windows-1251)'],
+  ['windows-1250', 'Central European (Windows-1250)'],
+  ['windows-1253', 'Greek (Windows-1253)'],
+  ['koi8-r', 'Cyrillic (KOI8-R)'],
+  ['iso-8859-2', 'Latin-2 (ISO-8859-2)'],
+  ['iso-8859-5', 'Cyrillic (ISO-8859-5)'],
+  ['shift_jis', 'Japanese (Shift_JIS), read only'],
+  ['gbk', 'Chinese (GBK), read only'],
+  ['big5', 'Chinese (Big5), read only'],
+  ['euc-kr', 'Korean (EUC-KR), read only'],
+]
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag)
@@ -12,6 +25,9 @@ const el = (tag, cls, text) => {
   if (text != null) n.textContent = text
   return n
 }
+
+// Label for any encoding key, including code pages that only appear in the reopen list.
+export const encName = (k) => ENC_LABEL[k] || (REOPEN.find((r) => r[0] === k) || [])[1] || k
 
 export function init(app) {
   const root = document.getElementById('texttools-root') || (() => {
@@ -143,7 +159,11 @@ export function init(app) {
     const d = activeDoc()
     if (!d) return
     if (kind === 'eol') menu(anchor, Object.keys(EOL_NAME).map((k) => [k, EOL_NAME[k], () => setEol(k)]), d.eol)
-    else menu(anchor, Object.keys(ENC_LABEL).map((k) => [k, ENC_LABEL[k], () => setEnc(k)]), d.encoding)
+    else {
+      const save = Object.keys(ENC_LABEL).map((k) => [k, ENC_LABEL[k], () => setEnc(k)])
+      const reopen = REOPEN.map(([k, label]) => ['reopen:' + k, 'Reopen as ' + label, () => app.actions.reopenWith(k)])
+      menu(anchor, [...save, ...reopen], d.encoding)
+    }
   }
 
   const reg = (id, title, run, keys, category) => app.commands.register({ id, title, run, keys, category })

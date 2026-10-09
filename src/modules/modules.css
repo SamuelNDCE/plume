@@ -498,3 +498,10 @@ body:not([data-view="wysiwyg"]) #outline-mini { display: none !important; }
 .st-btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 .st-btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
 .st-btn:disabled { opacity: .55; cursor: default; }
+
+/* print: the whole text of a source view (print sheet, see export.js). Hidden on screen. */
+#print-sheet { display: none; }
+@media print {
+  body.print-sheet-on > *:not(#print-sheet) { display: none !important; }
+  body.print-sheet-on #print-sheet { display: block !important; margin: 0; padding: 0; background: #fff; color: #000; font: 10.5pt/1.45 ui-monospace, Consolas, "Courier New", monospace; white-space: pre-wrap; overflow-wrap: anywhere; border: 0; }
+}

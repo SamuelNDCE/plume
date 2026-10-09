@@ -29,6 +29,11 @@ let untitledCount = 0
 let autosaveTimer = null
 let mountToken = 0
 
+// Text files above FULL_OPEN_MAX open as a read-only preview of their first PREVIEW_BYTES.
+// Measured 2026-10-09: 10 MB opened in 0.45 s, 50 MB in 2.0 s, 150 MB did not finish in four minutes.
+const FULL_OPEN_MAX = 50 * 1024 * 1024
+const PREVIEW_BYTES = 5 * 1024 * 1024
+
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
 const MD_RE = /\.(md|markdown|mdown|mkd)$/i
 const baseName = (p) => p.split(/[\\/]/).pop()
@@ -62,6 +67,7 @@ async function ensureCode() {
       d.dirty = d.content !== d.saved
       onDocChanged()
     },
+    onLanguage: (name) => app.bus.emit('code:language', name),
   })
   app.code = code
   return code
@@ -199,6 +205,10 @@ async function mountSheetFor(d) {
   }
 }
 
+// Spellcheck in the source view only for prose files (Markdown, .txt, .log, untitled), never for code.
+const PROSE_RE = /\.(txt|text|log|md|markdown|mdown|mkd)$/i
+const spellOn = (d) => !!app.settings.get('spellcheck') && !!d && (d.kind === 'md' || d.kind === 'text') && (PROSE_RE.test(d.name || '') || /^Untitled/.test(d.name || ''))
+
 // Put the right view on screen for the active doc.
 async function render() {
   leaveSheet()
@@ -230,6 +240,7 @@ async function render() {
   await destroyRich()
   show('source')
   const ce = await ensureCode()
+  ce.setOptions({ spellcheck: spellOn(d), readOnly: !!d.readOnly })
   ce.setDoc(d.content, d.name)
   applySettings()
   ce.focus()
@@ -269,7 +280,7 @@ function onDocChanged() {
 
 function updateTitle() {
   const d = doc()
-  api.setTitle(d ? `${d.dirty ? '● ' : ''}${d.name} — Plume` : 'Plume')
+  api.setTitle(d ? `${d.dirty ? '● ' : ''}${d.name} - Plume` : 'Plume')
 }
 
 /* ---------- documents (the "open documents" list replaces tabs) ---------- */
@@ -320,13 +331,25 @@ async function openPath(p) {
     const name = baseName(p)
     const kind = kindOf(name)
     const st = await api.stat(p)
+    // Very large text files would freeze the window. Above FULL_OPEN_MAX they open as a read-only preview of the start.
+    const preview = kind !== 'image' && st?.size > FULL_OPEN_MAX
+    if (preview) {
+      const mb = (n) => (n / 1048576).toFixed(0)
+      const r = await api.confirm(
+        `${name} is ${mb(st.size)} MB`,
+        `Plume opens files up to ${mb(FULL_OPEN_MAX)} MB in full; opening all of this would freeze the window. Open the first ${mb(PREVIEW_BYTES)} MB as a read-only preview instead? The file on disk is not changed.`,
+        ['Open preview', 'Cancel'],
+      )
+      if (r !== 0) return
+    }
     let d
     if (kind === 'image') {
       d = { name, kind, view: 'rich', path: p, content: '', saved: '', dirty: false, dataUrl: await api.readImage(p) }
     } else {
-      const f = await api.readFile(p)
+      const f = await api.readFile(p, preview ? { maxBytes: PREVIEW_BYTES } : {})
       if (f.binary) return app.toast(`${name} is a binary file`)
       d = { name, kind, view: 'rich', path: p, content: f.content, saved: f.content, dirty: false, encoding: f.encoding || 'utf-8', eol: f.eol || defaultEol(kind), mixedEol: !!f.mixedEol }
+      if (preview) Object.assign(d, { readOnly: true, view: 'source', truncated: f.truncated, totalSize: f.size })
     }
     d.mtime = st?.mtimeMs
     // replace a pristine empty untitled doc
@@ -344,13 +367,23 @@ async function openFile() {
 
 async function saveDoc(d, forceAs = false) {
   if (d.kind === 'image') return true
+  // A read-only preview holds only the start of a file: writing it would truncate the real file. Checked before any write.
+  if (d.readOnly) {
+    app.toast('Read-only preview: nothing was saved')
+    return false
+  }
   if (d === doc()) syncActive()
   let p = d.path
   if (!p || forceAs) {
     p = await api.saveDialog(d.path || d.name)
     if (!p) return false
   }
-  await api.writeFile(p, d.content, { encoding: d.encoding || 'utf-8', eol: d.eol || defaultEol(kindOf(baseName(p))) })
+  try {
+    await api.writeFile(p, d.content, { encoding: d.encoding || 'utf-8', eol: d.eol || defaultEol(kindOf(baseName(p))) })
+  } catch (e) {
+    app.toast(String((e && e.message) || 'Save failed').slice(0, 160))
+    return false
+  }
   d.path = p
   d.name = baseName(p)
   d.kind = kindOf(d.name) === 'image' ? 'text' : kindOf(d.name)
@@ -457,7 +490,7 @@ function saveSession() {
       'folio.session',
       JSON.stringify({
         active: app.state.active,
-        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.dirty })),
+        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, truncated: !!t.truncated, totalSize: t.totalSize, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.dirty })),
       }),
     )
   } catch {}
@@ -470,7 +503,16 @@ async function restoreSession() {
       if (t.path && !t.dirty) {
         try {
           if (t.kind === 'image') app.state.tabs.push({ ...t, dataUrl: await api.readImage(t.path) })
-          else {
+          // a saved tab that is a preview, or whose file has grown past the limit, comes back as a read-only preview
+          else if (t.readOnly || (await api.stat(t.path))?.size > FULL_OPEN_MAX) {
+            // a read-only preview stays a preview across restarts: never load the whole file, and never save it
+            const st = await api.stat(t.path)
+            if (!st) continue
+            const big = st.size > FULL_OPEN_MAX
+            const f = await api.readFile(t.path, big ? { maxBytes: PREVIEW_BYTES } : {})
+            if (f.binary) continue
+            app.state.tabs.push({ ...t, readOnly: big, view: big ? 'source' : t.view, content: f.content, saved: f.content, truncated: f.truncated, totalSize: f.size, mtime: st.mtimeMs })
+          } else {
             const f = await api.readFile(t.path)
             if (f.binary) continue
             app.state.tabs.push({ ...t, content: f.content, saved: f.content, encoding: f.encoding || 'utf-8', eol: f.eol || t.eol || defaultEol(t.kind), mixedEol: !!f.mixedEol, mtime: (await api.stat(t.path))?.mtimeMs })
@@ -498,7 +540,7 @@ async function checkExternal() {
         d.eol = f.eol || d.eol
         d.mtime = st.mtimeMs
         await render()
-        app.toast('Reloaded — file changed on disk')
+        app.toast('Reloaded: file changed on disk')
       }
     } catch {}
   }
@@ -519,6 +561,27 @@ app.actions = {
   switchTab: activate,
   retarget,
   render,
+  // Read the file again from disk as another code page (Notepad's "Reopen with encoding").
+  async reopenWith(label) {
+    const d = doc()
+    if (!d || !d.path || d.kind === 'image') return app.toast('Reopen needs a saved file')
+    if (d.readOnly) return app.toast('Read-only previews cannot be reopened')
+    if (d.dirty) {
+      const r = await api.confirm('Discard unsaved changes?', 'Reopening replaces the text with the file on disk.', ['Discard', 'Cancel'])
+      if (r !== 0) return
+    }
+    syncActive()
+    const f = await api.readFile(d.path, { encoding: label })
+    d.content = d.saved = f.content
+    d.encoding = label
+    d.eol = f.eol || d.eol
+    d.mixedEol = !!f.mixedEol
+    d.dirty = false
+    await render()
+    app.bus.emit('tab:list', app.state.tabs)
+    app.bus.emit('file:format', d)
+    app.toast(`Reopened as ${label}`)
+  },
   // Change how the file will be written (line ending / encoding). The text itself is unchanged.
   setFormat(fmt = {}) {
     const d = doc()
@@ -539,6 +602,7 @@ function applySettings() {
   const s = app.settings
   const root = document.documentElement
   root.dataset.theme = s.get('theme')
+  if (code) code.setOptions({ spellcheck: spellOn(doc()) })
   root.style.setProperty('--fs', s.get('fontSize') + 'px')
   // 820 is the default: leave it unset so the active theme's own width applies
   if (s.get('maxWidth') === 820) root.style.removeProperty('--doc-width')

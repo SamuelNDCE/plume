@@ -5,7 +5,7 @@
 const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
 
 const KIND_LABEL = { md: 'Markdown', text: 'Plain text', table: 'Table', image: 'Image' }
-import { EOL_LABEL, ENC_LABEL } from './texttools.js'
+import { EOL_LABEL, encName } from './texttools.js'
 const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image' }
 
 // Plain text of a markdown document: fences, syntax and HTML removed, text kept.
@@ -141,7 +141,7 @@ export function init(app) {
     eolBtn.hidden = encBtn.hidden = zoomBtn.hidden = !isText
     if (isText) {
       eolBtn.textContent = EOL_LABEL[t.eol] || 'LF'
-      encBtn.textContent = ENC_LABEL[t.encoding || 'utf-8'] || 'UTF-8'
+      encBtn.textContent = encName(t.encoding || 'utf-8')
       eolBtn.title = (t.mixedEol ? 'This file mixed line endings; they are unified when saved. ' : '') + 'Line endings used when saving. Click to change.'
       zoomBtn.textContent = Math.round((app.settings.get('fontSize') / 17) * 100) + '%'
     }
@@ -166,7 +166,9 @@ export function init(app) {
     pathEl.textContent = shown
     pathEl.title = t && t.path ? t.path : t ? t.name : ''
     dirtyEl.hidden = !(t && t.dirty)
-    kindEl.textContent = t ? KIND_LABEL[t.kind] || '' : ''
+    // a plain text file shows the language CodeMirror detected for it (JSON, YAML...), else Plain text
+    const lang = t && t.kind === 'text' && app.state.mode === 'source' && app.code ? app.code.languageName() : null
+    kindEl.textContent = t ? (t.readOnly ? 'Read-only preview' : lang || KIND_LABEL[t.kind]) || '' : ''
     const mode = app.state.mode
     const label = MODE_LABEL[mode] || ''
     const toggles = mode === 'wysiwyg' || mode === 'source'
@@ -194,6 +196,7 @@ export function init(app) {
   app.bus.on('file:saved', () => render())
   app.bus.on('editor:ready', () => render())
   app.bus.on('file:format', () => render())
+  app.bus.on('code:language', () => render())
   app.bus.on('settings:change', (c) => c && c.key === 'fontSize' && render())
 
   document.addEventListener('selectionchange', onSelectionMaybeChanged)
