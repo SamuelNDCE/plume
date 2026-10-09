@@ -210,6 +210,10 @@ export function createCodeEditor(host, { onChange } = {}) {
       })
     },
     cursorLine: () => view.state.doc.lineAt(view.state.selection.main.head).number,
+    cursorCol: () => {
+      const head = view.state.selection.main.head
+      return head - view.state.doc.lineAt(head).from + 1
+    },
     lineCount: () => view.state.doc.lines,
     setOptions(o = {}) {
       const effects = []

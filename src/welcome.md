@@ -8,7 +8,7 @@ A free, open-source viewer and editor for Markdown and plain text. Fast to open,
 - Select text for the formatting toolbar
 - **Ctrl+/** switches between rich and source view
 - **Ctrl+P** opens the command palette, **Ctrl+O** opens files, **Ctrl+,** opens settings
-- **F8** focus mode, **F9** typewriter mode, **F5** presentation, **Ctrl+F** find and replace
+- **F8** focus mode, **F9** typewriter mode, **F5** presentation, **Ctrl+F** find and replace, **Ctrl+G** go to line, **Ctrl+Shift+D** insert date and time
 
 ## Everything in one place
 

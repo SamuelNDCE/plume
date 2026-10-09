@@ -149,8 +149,8 @@ body.zen #sidebar, body.zen #sidebar-resizer, body.zen #tabbar, body.zen #status
 .doc-glyph { flex: none; min-width: 28px; padding: 1px 3px; border: 1px solid var(--border); border-radius: 4px; background: var(--code-bg); color: var(--fg-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.03em; text-align: center; }
 .doc-row.active .doc-glyph { color: inherit; border-color: currentColor; background: transparent; }
 .doc-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.doc-row.dirty .doc-name::after { content: ' ●'; color: var(--accent); }
-.doc-row.dirty.active .doc-name::after { color: inherit; }
+/* the unsaved dot is drawn once, in styles.css (a second glyph here used to stack inside it and clip) */
+.doc-row.dirty.active .doc-name::after { background: currentColor; }
 .doc-close { flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: 15px; line-height: 1; opacity: 0.55; cursor: pointer; }
 .doc-row:hover .doc-close, .doc-row.active .doc-close { opacity: 1; }
 .doc-close:hover { background: var(--hover); }
@@ -466,3 +466,35 @@ body:not([data-view="wysiwyg"]) #outline-mini { display: none !important; }
 .sh-chk input { accent-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .sh-btn, .sh-caret { transition: none; } }
 @media print { .sh-toolbar, .sh-fbar, .sh-status { display: none; } }
+
+/* text tools: go to line, status chips, pickers */
+#statusbar .sb-chip { padding: 1px 7px; }
+#statusbar .sb-chip[hidden] { display: none; }
+.tt-dialog { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); z-index: 70; width: 280px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-3, var(--bg-2)); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg, var(--shadow)); }
+.tt-label { font-size: 13px; font-weight: 600; }
+.tt-input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; font-size: 14px; }
+.tt-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tt-err { min-height: 1em; font-size: 12px; color: #c0392b; }
+.tt-menu { position: fixed; z-index: 70; min-width: 190px; padding: 5px; display: flex; flex-direction: column; background: var(--bg-3, var(--bg-2)); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg, var(--shadow)); }
+.tt-item { text-align: left; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.tt-item:hover, .tt-item:focus-visible { background: var(--hover); outline: none; }
+.tt-item.on { font-weight: 600; color: var(--accent); }
+.tt-item.on::before { content: '\2713\00a0'; }
+@media print { #texttools-root { display: none !important; } }
+
+/* update screen and settings */
+.update-screen { position: fixed; inset: 0; z-index: 5000; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); }
+.us-box { width: min(420px, 86vw); padding: 28px 30px; display: flex; flex-direction: column; gap: 12px; background: var(--bg-3, var(--bg-2)); color: var(--fg); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg, var(--shadow)); }
+.us-title { margin: 0; font-size: 18px; font-weight: 650; }
+.us-sub { font-size: 13px; color: var(--fg-muted); line-height: 1.45; }
+.us-bar { height: 8px; border-radius: 4px; margin-top: 4px; }
+.us-pct { min-height: 1.2em; font-size: 12.5px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.st-about .st-group { text-align: left; margin: 14px 0 6px; }
+.st-update-box { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; }
+.st-update-status { font-size: 15px; font-weight: 650; }
+.st-update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.st-update-box [hidden] { display: none; }
+@media print { .update-screen, .update-card { display: none !important; } }
+.st-btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.st-btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
+.st-btn:disabled { opacity: .55; cursor: default; }

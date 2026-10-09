@@ -5,6 +5,7 @@
 const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
 
 const KIND_LABEL = { md: 'Markdown', text: 'Plain text', table: 'Table', image: 'Image' }
+import { EOL_LABEL, ENC_LABEL } from './texttools.js'
 const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image' }
 
 // Plain text of a markdown document: fences, syntax and HTML removed, text kept.
@@ -70,7 +71,21 @@ export function init(app) {
   modeBtn.title = 'Toggle source mode (Ctrl+/)'
   modeBtn.addEventListener('click', () => app.actions.toggleSource())
 
-  right.append(wordsEl, charsEl, readEl, cursorEl, modeBtn)
+  const chip = (cls, title, kind) => {
+    const b = el('button', 'sb-mode sb-chip ' + cls)
+    b.type = 'button'
+    b.title = title
+    b.addEventListener('click', () => app.textTools && app.textTools.pick(kind, b))
+    return b
+  }
+  const eolBtn = chip('sb-eol', 'Line endings used when saving. Click to change.', 'eol')
+  const encBtn = chip('sb-enc', 'Encoding used when saving. Click to change.', 'enc')
+  const zoomBtn = el('button', 'sb-mode sb-chip sb-zoom')
+  zoomBtn.type = 'button'
+  zoomBtn.title = 'Zoom. Click to reset (Ctrl+0). Ctrl+scroll to zoom.'
+  zoomBtn.addEventListener('click', () => app.commands.run('view.zoomReset'))
+
+  right.append(wordsEl, charsEl, readEl, cursorEl, zoomBtn, eolBtn, encBtn, modeBtn)
   bar.append(left, right)
 
   /* ---------- state ---------- */
@@ -116,7 +131,20 @@ export function init(app) {
     readEl.textContent = stats.words ? `${Math.max(1, Math.ceil(stats.words / 200))} min read` : '0 min read'
     const inSource = app.state.mode === 'source' && !!app.code
     cursorEl.hidden = !inSource
-    if (inSource) cursorEl.textContent = `Ln ${app.code.cursorLine()} of ${app.code.lineCount()}`
+    if (inSource) {
+      cursorEl.textContent = `Ln ${app.code.cursorLine()}, Col ${app.code.cursorCol()}`
+      cursorEl.title = `${app.code.lineCount()} lines. Go to line: Ctrl+G`
+    }
+    // file format chips: only for files that are written back as text
+    const t = app.state.tabs[app.state.active]
+    const isText = !!t && (t.kind === 'md' || t.kind === 'text') && (app.state.mode === 'source' || app.state.mode === 'wysiwyg')
+    eolBtn.hidden = encBtn.hidden = zoomBtn.hidden = !isText
+    if (isText) {
+      eolBtn.textContent = EOL_LABEL[t.eol] || 'LF'
+      encBtn.textContent = ENC_LABEL[t.encoding || 'utf-8'] || 'UTF-8'
+      eolBtn.title = (t.mixedEol ? 'This file mixed line endings; they are unified when saved. ' : '') + 'Line endings used when saving. Click to change.'
+      zoomBtn.textContent = Math.round((app.settings.get('fontSize') / 17) * 100) + '%'
+    }
   }
 
   // Source selection and cursor moves come from the code editor, once it exists.
@@ -165,6 +193,8 @@ export function init(app) {
   app.bus.on('mode:change', () => render())
   app.bus.on('file:saved', () => render())
   app.bus.on('editor:ready', () => render())
+  app.bus.on('file:format', () => render())
+  app.bus.on('settings:change', (c) => c && c.key === 'fontSize' && render())
 
   document.addEventListener('selectionchange', onSelectionMaybeChanged)
 

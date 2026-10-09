@@ -90,6 +90,7 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 
 **More than Markdown**
 - Plain text, JSON, YAML, XML, HTML and code, with syntax highlighting and line numbers (CodeMirror 6)
+- Opens and saves text like Notepad does: UTF-8, UTF-8 with BOM, UTF-16 and legacy ANSI files open correctly, and the encoding and line endings (CRLF, LF, CR) are kept exactly when you save. Both show in the status bar and can be changed there. Also Ln/Col, `Ctrl+G` go to line, `Ctrl+Shift+D` date and time, zoom with `Ctrl+scroll`
 - CSV and TSV open in a real spreadsheet grid that fills the whole pane, like Excel:
   - Edit cells in place, with a formula bar, undo and redo, copy and paste to and from Excel, fill down and right
   - Formulas that recalculate as you type: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `ROUND`, text functions and more (your CSV keeps the formula text, so it opens anywhere)
@@ -135,7 +136,7 @@ Beyond the eight, you can change fonts (body, headings, code), heading scale, pa
 
 ## Updates
 
-Plume checks GitHub for a newer release when it starts and shows a small card: **Update**, then **Restart and install**. That is it.
+Plume checks GitHub for a newer release when it starts and shows a small card with **Update**. Click it and Plume shows one update screen with a progress bar, saves your open documents, restarts into the new version and reopens them. There is no installer wizard. You can also check any time under **Settings, About**.
 
 - **Windows installer and Linux AppImage:** download and install in place, one click.
 - **macOS, the portable Windows exe and the Linux `.deb`:** Plume tells you a new version exists and opens the download page.
@@ -271,6 +272,8 @@ Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Good places t
 | `Ctrl+Z` | Undo in source view |
 | `Ctrl+Shift+Z` / `Ctrl+Y` | Redo in source view |
 | `Ctrl+Shift+F` | Search folder |
+| `Ctrl+G` | Go to line (source view) |
+| `Ctrl+Shift+D` | Insert date and time |
 | `Ctrl+,` | Settings |
 | `F5` | Presentation |
 | `F8` / `F9` | Focus / typewriter mode |
