@@ -4,7 +4,7 @@
 
 # Plume
 
-**A free, open-source Markdown editor and viewer. Fast, beautiful, and made to be customised.**
+**Plume, the free, open-source universal file editor. Open and edit Markdown, text, logs, CSV, Excel, Word and PDF in one fast, beautiful app.**
 
 [![Release](https://img.shields.io/github/v/release/SamuelNDCE/plume?style=flat-square&color=4f46e5)](https://github.com/SamuelNDCE/plume/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4f46e5?style=flat-square)](LICENSE)
@@ -99,10 +99,20 @@ Updates are built in: when a new version is out, Plume tells you and you click o
   - Fast on big files: a 100,000-row CSV opens in about a fifth of a second
   - Saves back as plain text, and a file you only looked at is never changed
 - Images with zoom, pan and fit
+- PDF viewer: read only, page controls, zoom, loaded only when you open a PDF
+- Word viewer (`.docx`): read only, the document is sanitised before it is shown
+- Excel viewer (`.xlsx`): read only for now, with sheet tabs, a cell value line and find. Editing and saving to `.xlsx` are not available yet. Legacy `.xls` and `.ods` are not supported
+  > Correction 2026-10-29 (later): the Excel viewer now edits cells and saves back to `.xlsx` (type, F2, Enter, Tab, Escape, Delete, Ctrl+Z, Ctrl+Y, Ctrl+X, Ctrl+V, Ctrl+S). Limits: Save As is not yet tested, edits are lost if the app restarts before you save, edits and paste stay inside the existing data range, and for a file with a calc chain the chain is removed on save (`xlsxworker.js`).
+- Log view for `.log`, `.out` and `.err` files, and for files whose first lines look like logs
+- Text file types Plume registers with the OS: `md`, `markdown`, `mdown`, `mkd`, `txt`, `log`, `out`, `err`, `csv`, `tsv`, `json`, `jsonl`, `yaml`, `yml`, `xml`, `toml`, `ini`, `cfg`, `conf`, `env`, `properties`, `sql`, `diff`, `patch`, `ps1`, `sh`, `bat`, `cmd`, `js`, `ts`, `py`, `html`, `css`, `gitignore`
 
 **Working with files**
 - Open as many documents as you like; they sit in a library list, no tab bar
 - Folder tree, recent files, search across a whole folder, and the outline rail (below)
+- Folder search runs in a background worker thread, streams results as it finds them, can be cancelled, and stops at 200 hits
+- Recent files list, with an x on each entry to hide it
+- Right-click menu and a quick bar above selected text (bold, italic, strikethrough, code, text size, block style, link)
+- On Windows, a one-time bubble offers to open Plume's page in Windows Default apps
 - Create, rename, trash and reveal files from the sidebar
 - Autosave, session restore, and automatic reload when a file changes on disk
 
@@ -167,7 +177,9 @@ Plume is small and does little by design.
 
 - **No telemetry, no accounts, no ads.** The only network request Plume makes is the optional update check to GitHub, which you can turn off. (A document that links a remote `https` image will load it, like any viewer.)
 - **Locked-down window.** Context isolation and the renderer sandbox are on, Node integration is off, and a Content-Security-Policy blocks inline and remote scripts. The window reaches your disk only through a short list of named calls in [`electron/preload.cjs`](electron/preload.cjs).
-- **Links.** Only `http`, `https` and `mailto` links are ever handed to your system.
+- **File access.** Plume only touches files you picked in a dialog, dropped on the window or opened with it, plus the folders you opened. Its own data folder and dotfiles under your home folder (such as `.ssh`) are refused. Details: [SECURITY.md](SECURITY.md).
+- **Links.** Only `http`, `https` and `mailto` links are ever handed to your system. One exception: on Windows, the optional default-app prompt and Settings button open the fixed page `ms-settings:defaultapps?registeredAppUser=Plume`, and nothing else. Windows does not let an app set itself as default, so you still click "Set default" on each file type in Settings.
+  > Correction 2026-10-29: this said `ms-settings:defaultapps` before; the fixed `?registeredAppUser=Plume` query was added so Settings opens Plume's own page.
 - **Plugins are off by default** and you are warned before enabling one. See the security note in [docs/PLUGINS.md](docs/PLUGINS.md).
 - **Open source.** Read it, build it, change it.
 
@@ -183,9 +195,21 @@ gh attestation verify Plume-<version>-win-x64-setup.exe --repo SamuelNDCE/plume
 
 **Code signing.** Binaries are not yet signed with a Windows (Authenticode) or Apple certificate, which is why the OS may warn on first run. Use the checksum and attestation above, or build from source. Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
+## AI tools (MCP)
+
+An optional, separate MCP server lets AI tools such as Claude Desktop or Claude Code read your Markdown and text files. It is local stdio only, reads (and only with `--allow-write`, writes) files inside the one folder you give it on the command line, and makes no network calls. Plume itself is unchanged. Setup: [tools/plume-mcp/README.md](tools/plume-mcp/README.md).
+
 ## For developers: plugins and themes
 
 Plume is built to be extended. There are two ways, and neither needs you to touch the core app.
+
+### Add menu items (no code)
+
+The menu button (top left) also lists entries from `commands.json` in Plume's data folder (`%APPDATA%\plume` on Windows). It is created with an example on first run and re-read each time the menu opens. Each entry has `id`, `label`, optional `shortcut` (shown only) and `action`: `command` (runs a built-in command id in `value`), `openFile` (asks you to pick a file) or `insertText` (inserts `value`). Anything else is skipped with one console warning.
+
+```json
+[{ "id": "zoom-reset", "label": "Back to normal size", "action": "command", "value": "view.zoomReset" }]
+```
 
 ### Make a theme (no code)
 

@@ -99,9 +99,18 @@ function register({ app, ipcMain, shell, protocol }) {
       return { ...p, enabled: p.valid && enabled[p.id] === true }
     })
   })
-  ipcMain.handle('plugins:set-enabled', (_e, id, on) => {
+  // Consent is decided here, in the main process, so a compromised page cannot enable a plugin by itself.
+  ipcMain.handle('plugins:set-enabled', async (_e, id, on) => {
     if (typeof id !== 'string' || !ID_RE.test(id)) throw new Error('bad plugin id')
     const s = readState()
+    if (on && s.consent !== true) {
+      const p = validate(id)
+      const details = (p.name || id) + (p.permissions && p.permissions.length ? '\nPermissions: ' + p.permissions.join(', ') : '') + '\n\nThis plugin runs code inside Plume with access to your open documents, and it is not sandboxed. Only enable plugins you trust.'
+      const { dialog, BrowserWindow } = require('electron')
+      const r = await dialog.showMessageBox(BrowserWindow.getFocusedWindow() || undefined, { type: 'warning', message: 'Enable plugin?', detail: details, buttons: ['Enable', 'Cancel'], defaultId: 1, cancelId: 1 })
+      if (r.response !== 0) return false
+      s.consent = true
+    }
     if (on) s.enabled[id] = true
     else delete s.enabled[id]
     writeState(s)

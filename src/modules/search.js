@@ -1,4 +1,4 @@
-// Search in folder: the Search pane. Greps the open folder through window.folio.searchFolder and
+// Search in folder: the Search pane. Streams a search of the open folder from the main process (window.folio.searchStart, batches of hits) and
 // groups the hits by file. Clicking a hit opens the file and jumps to the match.
 // Owns the pane-switch commands: search.folder (Ctrl+Shift+F), library.show (Ctrl+Shift+E), outline.show (Ctrl+Shift+L).
 // Output is built with DOM APIs (no innerHTML).
@@ -20,6 +20,9 @@ export function init(app) {
   let lastRun = null // { query, opts } of the results on screen
   let seq = 0
   let timer = null
+  const CAP = 200
+  let live = null // { id, list, query, opts } of the search in flight
+  let paint = 0
 
   /* ---------- pattern helpers ---------- */
   function buildRe(q, o) {
@@ -128,7 +131,7 @@ export function init(app) {
     return wrap
   }
 
-  function renderResults(list) {
+  function renderResults(list, final = true) {
     lastList = list
     results.textContent = ''
     const groups = new Map()
@@ -137,13 +140,46 @@ export function init(app) {
       groups.get(r.path).hits.push(r)
     }
     if (!list.length) {
-      status.textContent = 'No results'
+      status.textContent = final ? 'No results' : 'Searching…'
       return
     }
     const files = groups.size
-    status.textContent = `${list.length}${list.length >= 300 ? '+' : ''} ${list.length === 1 ? 'result' : 'results'} in ${files} ${files === 1 ? 'file' : 'files'}`
+    status.textContent = `${list.length} ${list.length === 1 ? 'result' : 'results'} in ${files} ${files === 1 ? 'file' : 'files'}${final ? '' : ', searching…'}`
     for (const g of groups.values()) results.appendChild(groupEl(g))
+    if (final && list.length >= CAP) results.appendChild(el('p', 'lib-empty', `showing first ${CAP}, refine your search`))
   }
+
+  function stopLive() {
+    live = null
+    clearTimeout(paint)
+    paint = 0
+    window.folio.searchCancel()
+  }
+
+  function onBatch(m) {
+    if (!live || m.id !== live.id) return // an older search: ignore
+    if (m.hits && m.hits.length) live.list.push(...m.hits)
+    lastRun = { query: live.query, opts: live.opts }
+    if (m.done) {
+      clearTimeout(paint)
+      paint = 0
+      const list = live.list
+      live = null
+      if (m.invalid) {
+        status.textContent = 'Invalid pattern'
+        results.textContent = ''
+      } else if (m.failed || m.timedOut) {
+        renderResults(list)
+        status.textContent = m.timedOut ? 'Search timed out' : 'Search failed'
+      } else renderResults(list)
+      return
+    }
+    if (!paint) paint = setTimeout(() => {
+      paint = 0
+      if (live) renderResults(live.list, false)
+    }, 60)
+  }
+  window.folio.onSearchBatch(onBatch)
 
   /* ---------- search ---------- */
   function showHint(on) {
@@ -161,29 +197,26 @@ export function init(app) {
     }
     showHint(false)
     if (!q) {
+      stopLive()
       lastRun = null
+      lastList = []
       status.textContent = ''
       results.textContent = ''
       return
     }
     if (opts.regex && !safeRe(q, opts)) {
+      stopLive()
       status.textContent = 'Invalid pattern'
       results.textContent = ''
       return
     }
     const mine = ++seq
     status.textContent = 'Searching…'
+    results.textContent = ''
     const snapshot = { ...opts }
-    window.folio
-      .searchFolder(root.root, q, snapshot)
-      .then((list) => {
-        if (mine !== seq) return
-        lastRun = { query: q, opts: snapshot }
-        renderResults(list || [])
-      })
-      .catch(() => {
-        if (mine === seq) status.textContent = 'Search failed'
-      })
+    live = { id: mine, list: [], query: q, opts: snapshot }
+    lastList = []
+    window.folio.searchStart(mine, root.root, q, snapshot)
   }
 
   function runSoon(ms) {
@@ -228,7 +261,15 @@ export function init(app) {
   }
 
   /* ---------- wiring ---------- */
-  input.addEventListener('input', () => runSoon(250))
+  input.addEventListener('input', () => {
+    if (!input.value) {
+      clearTimeout(timer)
+      run() // clearing the box stops the search at once
+    } else {
+      stopLive() // a new query cancels the old search immediately
+      runSoon(250)
+    }
+  })
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()

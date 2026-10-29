@@ -4,7 +4,6 @@
 // CJK ideographs, kana and hangul: each character counts as one word.
 const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
 
-const KIND_LABEL = { md: 'Markdown', text: 'Plain text', table: 'Table', image: 'Image' }
 import { EOL_LABEL, encName } from './texttools.js'
 const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image' }
 
@@ -38,6 +37,14 @@ export function computeStats(md, markdown = true) {
   return { words, chars, lines: (md || '').split('\n').length }
 }
 
+// Human size for the status bar: bytes, KB, MB or GB, one decimal below 10 units.
+function formatSize(n) {
+  if (n < 1024) return n + ' B'
+  if (n < 1048576) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB'
+  if (n < 1073741824) return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB'
+  return (n / 1073741824).toFixed(2) + ' GB'
+}
+
 export function init(app) {
   const $ = (s) => document.querySelector(s)
   const bar = $('#statusbar')
@@ -67,6 +74,7 @@ export function init(app) {
   const charsEl = el('span', 'sb-stat sb-chars')
   const readEl = el('span', 'sb-stat sb-read')
   const cursorEl = el('span', 'sb-stat sb-lines')
+  const sizeEl = el('span', 'sb-stat sb-size')
   const modeBtn = el('button', 'sb-mode')
   modeBtn.type = 'button'
   modeBtn.title = 'Toggle source mode (Ctrl+/)'
@@ -86,7 +94,7 @@ export function init(app) {
   zoomBtn.title = 'Zoom. Click to reset (Ctrl+0). Ctrl+scroll to zoom.'
   zoomBtn.addEventListener('click', () => app.commands.run('view.zoomReset'))
 
-  right.append(wordsEl, charsEl, readEl, cursorEl, zoomBtn, eolBtn, encBtn, modeBtn)
+  right.append(wordsEl, charsEl, readEl, sizeEl, cursorEl, zoomBtn, eolBtn, encBtn, modeBtn)
   bar.append(left, right)
 
   /* ---------- state ---------- */
@@ -118,8 +126,14 @@ export function init(app) {
   }
 
   function renderStats() {
-    // spreadsheets and images have no prose: word counts and reading time would be noise (the grid has its own stats)
-    if (app.state.mode === 'table' || app.state.mode === 'image') {
+    const cur = app.state.tabs[app.state.active]
+    // file size shows for every file that has one
+    sizeEl.textContent = cur && cur.size != null ? formatSize(cur.size) : ''
+    sizeEl.hidden = !sizeEl.textContent
+    // spreadsheets, images and PDF/Word/Excel viewers have no prose: word counts would be noise (the grid has its own stats).
+    // Logs are text and keep their counts, even though they open in the table view.
+    const noProse = app.state.mode === 'image' || app.state.mode === 'viewer' || (app.state.mode === 'table' && !(cur && cur.log))
+    if (noProse) {
       wordsEl.hidden = charsEl.hidden = readEl.hidden = cursorEl.hidden = true
       return
     }
@@ -167,9 +181,8 @@ export function init(app) {
     pathEl.textContent = shown
     pathEl.title = t && t.path ? t.path : t ? t.name : ''
     dirtyEl.hidden = !(t && t.dirty)
-    // a plain text file shows the language CodeMirror detected for it (JSON, YAML...), else Plain text
-    const lang = t && t.kind === 'text' && app.state.mode === 'source' && app.code ? app.code.languageName() : null
-    kindEl.textContent = t ? (t.readOnly ? 'Read-only preview' : lang || KIND_LABEL[t.kind]) || '' : ''
+    // no file-kind pill (Markdown, Plain text...): only a read-only preview says so
+    kindEl.textContent = t && t.readOnly ? 'Read-only preview' : ''
     const mode = app.state.mode
     const label = MODE_LABEL[mode] || ''
     const toggles = mode === 'wysiwyg' || mode === 'source'

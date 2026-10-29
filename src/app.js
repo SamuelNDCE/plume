@@ -76,6 +76,11 @@ const DEFAULTS = {
   chartStyle: '',
   pluginsConsent: false,
   checkUpdates: true,
+  defaultAppPrompted: false,
+  hiddenRecents: [],
+  logOnOpen: true,
+  freezeFirstRow: true,
+  defaultZoom: 100,
 }
 
 class Settings {

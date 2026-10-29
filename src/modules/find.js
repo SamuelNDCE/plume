@@ -9,6 +9,7 @@ let bar = null
 let findIn = null
 let replIn = null
 let replRow = null
+let toggleBtn = null
 let countEl = null
 let optBtns = {}
 let timer = null
@@ -34,22 +35,32 @@ function el(tag, cls, text) {
   return n
 }
 
+const ico = (inner) =>
+  `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`
+const FI = {
+  up: ico('<path d="m6 15 6-6 6 6"/>'),
+  down: ico('<path d="m6 9 6 6 6-6"/>'),
+  close: ico('<path d="M6 6l12 12M18 6 6 18"/>'),
+  caret: ico('<path d="m9 6 6 6-6 6"/>'),
+  // "Aa": a capital A beside a small a
+  case: ico('<path d="M3 17 7.5 6 12 17M4.8 13h5.4"/><circle cx="17" cy="14.2" r="2.8"/><path d="M19.8 11.4V17"/>'),
+  // whole word: text between two brackets
+  word: ico('<path d="M3 8v8M21 8v8M3 16h18M8 13l2-5 2 5M8.7 11.6h2.6"/>'),
+  // regex: dot and asterisk
+  regex: ico('<circle cx="6" cy="17" r="1.2" fill="currentColor"/><path d="M13 6v8M9.5 8l7 4M16.5 8l-7 4"/>'),
+  one: ico('<path d="M4 8h10M4 16h6M14 14l3 3 4-5"/>'),
+  all: ico('<path d="M4 7h9M4 12h6M4 17h9M14 11l3 3 4-5M14 16l3 3 4-5"/>'),
+}
+
 function buildBar() {
   bar = el('div', 'find-bar')
   bar.setAttribute('role', 'search')
   bar.hidden = true
 
-  const row = el('div', 'find-row')
-  findIn = el('input', 'find-input')
-  findIn.type = 'text'
-  findIn.placeholder = 'Find'
-  findIn.setAttribute('aria-label', 'Find')
-  countEl = el('span', 'find-count')
-  countEl.setAttribute('aria-live', 'polite')
-
-  const btn = (text, title, onClick, cls = 'find-btn') => {
-    const b = el('button', cls, text)
+  const btn = (icon, title, onClick, cls = 'find-btn') => {
+    const b = el('button', cls)
     b.type = 'button'
+    b.innerHTML = icon
     b.title = title
     b.setAttribute('aria-label', title)
     b.addEventListener('mousedown', (e) => e.preventDefault())
@@ -57,8 +68,8 @@ function buildBar() {
     return b
   }
 
-  const opt = (key, text, title) => {
-    const b = btn(text, title, () => {
+  const opt = (key, icon, title) => {
+    const b = btn(icon, title, () => {
       state[key] = !state[key]
       b.setAttribute('aria-pressed', String(state[key]))
       b.classList.toggle('on', state[key])
@@ -70,39 +81,68 @@ function buildBar() {
     return b
   }
 
+  const row = el('div', 'find-row')
+  findIn = el('input', 'find-input')
+  findIn.type = 'text'
+  findIn.placeholder = 'Find'
+  findIn.spellcheck = false
+  findIn.setAttribute('aria-label', 'Find')
+  countEl = el('span', 'find-count')
+  countEl.setAttribute('aria-live', 'polite')
+  toggleBtn = btn(FI.caret, 'Show replace (Ctrl+H)', () => setReplace(replRow.hidden), 'find-btn find-toggle')
+  toggleBtn.setAttribute('aria-expanded', 'false')
+  const sep = () => el('span', 'find-sep')
+
   row.append(
+    toggleBtn,
     findIn,
     countEl,
-    opt('case', 'Aa', 'Match case'),
-    opt('word', 'W', 'Whole word'),
-    opt('regex', '.*', 'Regular expression'),
-    btn('↑', 'Previous match (Shift+Enter)', () => step(-1)),
-    btn('↓', 'Next match (Enter)', () => step(1)),
-    btn('×', 'Close (Esc)', () => close()),
+    opt('case', FI.case, 'Match case'),
+    opt('word', FI.word, 'Whole word'),
+    opt('regex', FI.regex, 'Regular expression'),
+    sep(),
+    btn(FI.up, 'Previous match (Shift+Enter)', () => step(-1)),
+    btn(FI.down, 'Next match (Enter)', () => step(1)),
+    btn(FI.close, 'Close (Esc)', () => close()),
   )
 
   replRow = el('div', 'find-row replace-row')
   replRow.hidden = true
   replIn = el('input', 'replace-input')
   replIn.type = 'text'
-  replIn.placeholder = 'Replace'
+  replIn.placeholder = 'Replace with'
+  replIn.spellcheck = false
   replIn.setAttribute('aria-label', 'Replace with')
   replRow.append(
     replIn,
-    btn('Replace', 'Replace current match', () => replaceOne(), 'find-btn find-text'),
-    btn('Replace all', 'Replace all matches', () => replaceAll(), 'find-btn find-text'),
+    btn(FI.one, 'Replace this match (Enter)', () => replaceOne()),
+    btn(FI.all, 'Replace all matches', () => replaceAll()),
   )
 
   bar.append(row, replRow)
   document.getElementById('find-root').appendChild(bar)
 
+  let typing = 0
   findIn.addEventListener('input', () => {
-    cur = 0
-    refresh(false)
-    if (!inSource() && cur >= 0) revealWysiwyg()
+    clearTimeout(typing)
+    typing = setTimeout(() => {
+      cur = 0
+      refresh(false)
+      if (!inSource() && cur >= 0) revealWysiwyg()
+    }, 120)
   })
   findIn.addEventListener('keydown', barKey)
   replIn.addEventListener('keydown', barKey)
+}
+
+function setReplace(on) {
+  replRow.hidden = !on
+  toggleBtn.setAttribute('aria-expanded', String(on))
+  toggleBtn.classList.toggle('open', on)
+  const t = on ? 'Hide replace' : 'Show replace (Ctrl+H)'
+  toggleBtn.title = t
+  toggleBtn.setAttribute('aria-label', t)
+  if (on) replIn.focus()
 }
 
 function barKey(e) {
@@ -354,9 +394,16 @@ function selectedText() {
 
 function open(withReplace) {
   if (!bar) return
+  // A log view has its own line filter, backed by its in-memory index: Ctrl+F goes there.
+  const lvf = document.querySelector('.lv .lv-filter')
+  if (lvf && lvf.offsetParent) {
+    lvf.focus()
+    lvf.select()
+    return
+  }
   isOpen = true
   bar.hidden = false
-  replRow.hidden = !withReplace
+  setReplace(!!withReplace)
   const sel = selectedText()
   if (sel && !/[\r\n]/.test(sel) && sel.length < 200) {
     findIn.value = sel
@@ -367,7 +414,7 @@ function open(withReplace) {
   refresh(false)
 }
 
-function close() {
+function close(refocus = true) {
   if (!isOpen) return
   isOpen = false
   bar.hidden = true
@@ -376,6 +423,7 @@ function close() {
     CSS.highlights.delete('folio-find')
     CSS.highlights.delete('folio-find-current')
   }
+  if (!refocus) return
   if (codeEd()) app.code.focus()
   else pmEl()?.focus()
 }
@@ -395,6 +443,15 @@ export function init(appCtx) {
     clearTimeout(timer)
     timer = setTimeout(() => refresh(false), 150)
   }
+  // Clicking anywhere outside the bar, or pressing Escape, closes it.
+  document.addEventListener('mousedown', (e) => {
+    if (!isOpen || bar.contains(e.target)) return
+    if (e.target.closest && e.target.closest('[aria-label^="Find"], [title^="Find"]')) return // the header Find button toggles it itself
+    close(false)
+  }, true)
+  document.addEventListener('keydown', (e) => {
+    if (isOpen && e.key === 'Escape' && !e.defaultPrevented && !bar.contains(e.target)) close()
+  })
   app.bus.on('doc:change', schedule)
   app.bus.on('mode:change', () => refresh(false))
   app.bus.on('tab:switch', () => refresh(false))

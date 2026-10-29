@@ -1,7 +1,7 @@
 {
   "name": "plume",
-  "version": "0.4.0",
-  "description": "Plume",
+  "version": "0.5.0",
+  "description": "Plume, the free, open-source universal file editor: Markdown, text, logs, CSV, Excel, Word and PDF.",
   "license": "MIT",
   "main": "electron/main.cjs",
   "type": "module",
@@ -30,8 +30,13 @@
     "@lezer/highlight": "^1.2.5",
     "@milkdown/crepe": "^7.0.0",
     "codemirror": "^6.0.2",
+    "dompurify": "^3.4.17",
     "electron-updater": "^6.8.9",
-    "mermaid": "^12.1.0"
+    "jszip": "^3.10.2",
+    "mammoth": "^1.13.0",
+    "mermaid": "^12.1.0",
+    "pdfjs-dist": "^6.4.299",
+    "read-excel-file": "^9.3.14"
   },
   "build": {
     "appId": "dev.plume.app",
@@ -72,6 +77,21 @@
         "role": "Editor"
       },
       {
+        "ext": "log",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "out",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "err",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
         "ext": "csv",
         "name": "Text document",
         "role": "Editor"
@@ -87,7 +107,117 @@
         "role": "Editor"
       },
       {
-        "ext": "log",
+        "ext": "jsonl",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "yaml",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "yml",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "xml",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "toml",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "ini",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "cfg",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "conf",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "env",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "properties",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "sql",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "diff",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "patch",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "ps1",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "sh",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "bat",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "cmd",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "js",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "ts",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "py",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "html",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "css",
+        "name": "Text document",
+        "role": "Editor"
+      },
+      {
+        "ext": "gitignore",
         "name": "Text document",
         "role": "Editor"
       }
@@ -118,6 +248,7 @@
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh",
       "artifactName": "Plume-${version}-win-x64-setup.${ext}"
     },
     "portable": {

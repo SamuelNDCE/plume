@@ -1,13 +1,22 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron')
 const fs = require('node:fs')
 const textio = require('./textio.cjs')
+const { writeAtomic } = require('./atomicwrite.cjs')
+const grants = require('./grants.cjs')
 const path = require('node:path')
+// Grants made by the main process for something the OS or the user handed us (never from a renderer request).
+const grantQuiet = (p, opts) => { try { grants.grant(p, opts) } catch {} }
+const need = grants.assert
 
 const isDev = !!process.env.VITE_DEV_URL
+// QA hooks (PLUME_STEPS, PLUME_SMOKE, PLUME_USER_DATA, PLUME_SEARCH_LOG) only run outside a packaged build.
+const QA = !app.isPackaged
 const MD_EXT = new Set(['.md', '.markdown', '.mdown', '.mkd'])
 const IMG_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif'])
-const TEXT_EXT = new Set(['.txt', '.text', '.log', '.json', '.jsonc', '.json5', '.csv', '.tsv', '.xml', '.yaml', '.yml', '.toml', '.ini', '.conf', '.cfg', '.html', '.htm', '.css', '.scss', '.less', '.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx', '.vue', '.svelte', '.py', '.rs', '.go', '.java', '.kt', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.sh', '.bash', '.zsh', '.bat', '.cmd', '.ps1', '.sql', '.lua', '.swift', '.tex', '.rst', '.org', '.diff', '.patch', '.gitignore', '.env.example', '.mdx'])
-const OPENABLE = (p) => { const e = path.extname(p).toLowerCase(); return MD_EXT.has(e) || TEXT_EXT.has(e) || IMG_EXT.has(e) }
+const TEXT_EXT = new Set(['.txt', '.text', '.log', '.json', '.jsonc', '.json5', '.csv', '.tsv', '.xml', '.yaml', '.yml', '.toml', '.ini', '.conf', '.cfg', '.html', '.htm', '.css', '.scss', '.less', '.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx', '.vue', '.svelte', '.py', '.rs', '.go', '.java', '.kt', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.sh', '.bash', '.zsh', '.bat', '.cmd', '.ps1', '.sql', '.lua', '.swift', '.tex', '.rst', '.org', '.diff', '.patch', '.gitignore', '.env', '.env.example', '.mdx', '.jsonl', '.out', '.err', '.properties'])
+// a dotfile such as .env or .gitignore has no extname, so its whole name counts as the extension
+const extOf = (p) => { const b = path.basename(p).toLowerCase(); return b.startsWith('.') && b.indexOf('.', 1) < 0 ? b : path.extname(b) }
+const OPENABLE = (p) => { const e = extOf(p); return MD_EXT.has(e) || TEXT_EXT.has(e) || IMG_EXT.has(e) }
 // Optional feature modules (each owned by one area). Required lazily so a missing one never blocks launch.
 const optional = (name) => {
   try {
@@ -45,6 +54,8 @@ function createWindow() {
     minWidth: 640,
     minHeight: 420,
     show: false,
+    // keeps the page painting while the window is hidden, so QA screenshots still work
+    paintWhenInitiallyHidden: true,
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     backgroundColor: bg.color,
     title: 'Plume',
@@ -57,7 +68,10 @@ function createWindow() {
     },
   })
   Menu.setApplicationMenu(null)
-  win.once('ready-to-show', () => win && win.show())
+  // QA only: PLUME_HIDDEN=1 keeps the test window off the screen and out of the taskbar. The app still runs and paints.
+  const hidden = QA && !!process.env.PLUME_HIDDEN
+  if (hidden) win.setSkipTaskbar(true)
+  win.once('ready-to-show', () => win && !hidden && win.show())
   if (isDev) win.loadURL(process.env.VITE_DEV_URL)
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   // Only web and mail links ever leave the app; anything else (file:, javascript:, custom schemes) is dropped.
@@ -70,15 +84,33 @@ function createWindow() {
     openSafe(url)
     return { action: 'deny' }
   })
+  // Same policy as the meta tag in index.html, also sent as a response header so it is enforced and Electron can see it.
+  const CSP = "default-src 'self'; img-src 'self' data: blob: https: file: plume-plugin:; style-src 'self' 'unsafe-inline' plume-plugin:; script-src 'self' plume-plugin:; font-src 'self' data:; connect-src 'self' ws://localhost:5199 http://localhost:5199"
+  win.webContents.session.webRequest.onHeadersReceived((details, cb) => {
+    cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CSP] } })
+  })
+  // Only the app's own file (and, in development, the dev server's exact origin) may load in the window.
+  // A prefix check let http://localhost.evil.com and any file: URL through; compare parsed values instead.
+  const appFile = path.join(__dirname, '..', 'dist', 'index.html')
+  const devOrigin = isDev ? new URL(process.env.VITE_DEV_URL).origin : null
+  const isOwnPage = (url) => {
+    try {
+      const u = new URL(url)
+      if (u.protocol === 'file:') return path.normalize(decodeURIComponent(u.pathname.replace(/^\/([A-Za-z]:)/, '$1'))).toLowerCase() === path.normalize(appFile).toLowerCase()
+      return !!devOrigin && u.origin === devOrigin
+    } catch {
+      return false
+    }
+  }
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file:') && !url.startsWith('http://localhost')) {
+    if (!isOwnPage(url)) {
       e.preventDefault()
       openSafe(url)
     }
   })
   win.on('closed', () => (win = null))
   // Scripted click-through for QA: PLUME_STEPS=<json file> of [{js?, text?, key?, click?, wait?, shot?}], PLUME_SHOT_DIR=<dir>.
-  if (process.env.PLUME_STEPS) {
+  if (QA && process.env.PLUME_STEPS) {
     const errs = []
     win.webContents.on('console-message', (_e, level, msg) => level >= 2 && errs.push(msg))
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -103,7 +135,7 @@ function createWindow() {
       app.exit(0)
     }, 3000))
   }
-  if (process.env.PLUME_SMOKE) {
+  if (QA && process.env.PLUME_SMOKE) {
     const errs = []
     win.webContents.on('console-message', (_e, level, msg) => level >= 2 && errs.push(msg))
     win.webContents.on('did-finish-load', () => setTimeout(async () => {
@@ -143,10 +175,25 @@ const mdFilters = [
 
 ipcMain.handle('file:open-dialog', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: mdFilters })
-  return r.canceled ? [] : r.filePaths
+  if (r.canceled) return []
+  r.filePaths.forEach((p) => grantQuiet(p))
+  return r.filePaths
+})
+// The ONE grant a renderer can ask for: files dropped on the window (paths from webUtils.getPathForFile).
+// A drop is a user gesture the main process cannot see, so it is accepted on trust. Only existing regular files,
+// never folders, so page code cannot widen access to a whole directory this way.
+ipcMain.handle('grant:dropped', (_e, paths) => {
+  const out = []
+  for (const p of Array.isArray(paths) ? paths.slice(0, 50) : []) {
+    try {
+      if (typeof p === 'string' && fs.statSync(p).isFile()) { grants.grant(p); out.push(p) }
+    } catch {}
+  }
+  return out // the paths that were granted
 })
 // opts.maxBytes reads only the start of a file (the read-only preview of a very large one), cut back to a whole line.
 ipcMain.handle('file:read', (_e, p, opts = {}) => {
+  need(p)
   const size = fs.statSync(p).size
   let buf
   if (opts.maxBytes && size > opts.maxBytes) {
@@ -159,68 +206,137 @@ ipcMain.handle('file:read', (_e, p, opts = {}) => {
   const d = opts.encoding ? textio.decodeAs(buf, opts.encoding) : textio.decode(buf)
   return { path: p, name: path.basename(p), size, truncated: buf.length < size, binary: d.binary, content: d.content, encoding: d.encoding, eol: d.eol, mixedEol: d.mixedEol }
 })
+// Log follow: the whole lines added after byte offset `from` (a half-written last line waits for its newline).
+ipcMain.handle('file:read-tail', (_e, p, from, encoding) => {
+  need(p)
+  const st = fs.statSync(p)
+  const base = { size: st.size, mtimeMs: st.mtimeMs, consumed: from, content: '' }
+  if (/^utf-16/.test(encoding || '')) return { ...base, unsupported: true }
+  if (st.size < from) return { ...base, reset: true }
+  if (st.size === from) return base
+  const len = Math.min(st.size - from, 8 * 1024 * 1024)
+  let buf = Buffer.alloc(len)
+  const fd = fs.openSync(p, 'r')
+  try { fs.readSync(fd, buf, 0, len, from) } finally { fs.closeSync(fd) }
+  const nl = buf.lastIndexOf(0x0a)
+  if (nl < 0) return base
+  buf = buf.subarray(0, nl + 1)
+  const label = !encoding || encoding === 'utf-8-bom' ? 'utf-8' : encoding
+  let d
+  try { d = textio.decodeAs(buf, label) } catch { d = textio.decodeAs(buf, 'utf-8') }
+  return { ...base, content: d.content, consumed: from + buf.length }
+})
 ipcMain.handle('file:create', (_e, dir, name) => {
   const dest = path.join(dir, name)
+  need(dest)
   if (fs.existsSync(dest)) throw new Error('exists')
-  fs.writeFileSync(dest, '')
+  fs.writeFileSync(dest, '', { flag: 'wx' }) // wx: fails if the file appeared since the check, never truncates an existing one
   return dest
 })
 ipcMain.handle('file:rename', (_e, from, to) => {
+  need(from)
+  need(to)
   if (fs.existsSync(to)) throw new Error('exists')
   fs.renameSync(from, to)
   return to
 })
 ipcMain.handle('file:trash', async (_e, p) => {
+  need(p)
   await shell.trashItem(p)
   return true
 })
-ipcMain.handle('folder:search', (_e, dir, query, opts = {}) => {
-  const out = []
-  let re
+// Folder search: runs in a worker thread (electron/searchworker.cjs), streams hits in batches, one search at a time.
+// The renderer's query is only ever used as a plain string (or, in regex mode, inside the worker, which is killed on cancel or after SEARCH_TIMEOUT_MS).
+const SEARCH_TIMEOUT_MS = 20000
+let searchRun = null // { id, worker, timer }
+const stopSearch = () => {
+  if (!searchRun) return
+  clearTimeout(searchRun.timer)
+  const w = searchRun.worker
+  searchRun = null
+  w.removeAllListeners()
+  w.on('error', () => {})
+  w.terminate()
+}
+ipcMain.on('folder:search-cancel', () => stopSearch())
+ipcMain.on('folder:search-start', (e, id, dir, query, opts) => {
+  stopSearch()
+  const sender = e.sender
+  const send = (m) => { if (!sender.isDestroyed()) sender.send('folder:search-batch', { id, ...m }) }
   try {
-    re = new RegExp(opts.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.matchCase ? '' : 'i')
-  } catch {
-    return []
-  }
-  const walk = (d, depth) => {
-    if (out.length >= 300 || depth > 8) return
-    let ents = []
-    try { ents = fs.readdirSync(d, { withFileTypes: true }) } catch { return }
-    for (const e of ents) {
-      if (e.name.startsWith('.') || e.name === 'node_modules') continue
-      const full = path.join(d, e.name)
-      if (e.isDirectory()) walk(full, depth + 1)
-      else if (OPENABLE(e.name) && !IMG_EXT.has(path.extname(e.name).toLowerCase())) {
-        let st
-        try { st = fs.statSync(full) } catch { continue }
-        if (st.size > 2_000_000) continue
-        let text
-        try { text = fs.readFileSync(full, 'utf8') } catch { continue }
-        const lines = text.split(/\r?\n/)
-        for (let i = 0; i < lines.length && out.length < 300; i++) {
-          if (re.test(lines[i])) out.push({ path: full, name: e.name, line: i + 1, text: lines[i].trim().slice(0, 200) })
-        }
+    if (typeof id !== 'number' || typeof dir !== 'string' || typeof query !== 'string' || !query || query.length > 500 || !path.isAbsolute(dir)) throw new Error('bad args')
+    need(dir, { folder: true })
+    const root = fs.realpathSync(dir)
+    if (!fs.statSync(root).isDirectory()) throw new Error('not a folder')
+    opts = opts || {}
+    const t0 = process.hrtime.bigint()
+    const { Worker } = require('node:worker_threads')
+    const worker = new Worker(path.join(__dirname, 'searchworker.cjs'), {
+      workerData: {
+        dir: root, query, matchCase: !!opts.matchCase, regex: !!opts.regex,
+        extOk: [...MD_EXT, ...TEXT_EXT], maxHits: 200, maxBytes: 2_000_000, maxDepth: 12,
+      },
+    })
+    const run = { id, worker, timer: setTimeout(() => { if (searchRun === run) { stopSearch(); send({ hits: [], done: true, timedOut: true }) } }, SEARCH_TIMEOUT_MS) }
+    searchRun = run
+    let firstAt = null
+    worker.on('message', (m) => {
+      if (searchRun !== run) return
+      if (m.hits && m.hits.length && firstAt === null) firstAt = Number(process.hrtime.bigint() - t0) / 1e6
+      send(m)
+      if (m.done) {
+        if (QA && process.env.PLUME_SEARCH_LOG) console.log('SEARCHT ' + JSON.stringify({ firstHitMs: firstAt && Math.round(firstAt), totalMs: Math.round(Number(process.hrtime.bigint() - t0) / 1e6), files: m.files, capped: !!m.capped }))
+        clearTimeout(run.timer)
+        searchRun = null
       }
-    }
+    })
+    worker.on('error', () => { if (searchRun === run) { stopSearch(); send({ hits: [], done: true, failed: true }) } })
+  } catch {
+    send({ hits: [], done: true, failed: true })
   }
-  walk(dir, 0)
-  return out
 })
 ipcMain.handle('file:write', (_e, p, content, fmt = {}) => {
-  fs.writeFileSync(p, textio.encode(content, fmt.encoding, fmt.eol))
+  need(p)
+  if (typeof content !== 'string') throw new Error('nothing to write') // never write "undefined" or an object over a file
+  writeAtomic(p, textio.encode(content, fmt.encoding, fmt.eol)) // temp file + rename: a failed write leaves the original intact
+  return true
+})
+// Binary save (the Excel viewer): same grant check as file:write, written to a temp file then renamed so a crash never leaves a half file.
+ipcMain.handle('file:write-bytes', (_e, p, bytes) => {
+  need(p)
+  if (!(bytes instanceof Uint8Array) || !bytes.length) throw new Error('nothing to write')
+  const tmp = p + '.plume-tmp'
+  try {
+    fs.writeFileSync(tmp, bytes)
+    fs.renameSync(tmp, p)
+  } catch (e) {
+    try { fs.unlinkSync(tmp) } catch {}
+    throw e
+  }
   return true
 })
 ipcMain.handle('file:save-dialog', async (_e, suggested) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: suggested || 'Untitled.md', filters: mdFilters })
-  return r.canceled ? null : r.filePath
+  if (r.canceled) return null
+  grantQuiet(r.filePath)
+  return r.filePath
 })
 ipcMain.handle('folder:open-dialog', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
-  return r.canceled ? null : r.filePaths[0]
+  if (r.canceled) return null
+  grantQuiet(r.filePaths[0], { folder: true })
+  return r.filePaths[0]
 })
-ipcMain.handle('folder:tree', (_e, dir) => ({ root: dir, name: path.basename(dir), children: readDirTree(dir) }))
-ipcMain.handle('file:reveal', (_e, p) => shell.showItemInFolder(p))
+ipcMain.handle('folder:tree', (_e, dir) => {
+  need(dir, { folder: true })
+  return { root: dir, name: path.basename(dir), children: readDirTree(dir) }
+})
+ipcMain.handle('file:reveal', (_e, p) => {
+  need(p)
+  return shell.showItemInFolder(p)
+})
 ipcMain.handle('file:stat', (_e, p) => {
+  need(p)
   try {
     const st = fs.statSync(p)
     return { mtimeMs: st.mtimeMs, size: st.size }
@@ -228,7 +344,17 @@ ipcMain.handle('file:stat', (_e, p) => {
     return null
   }
 })
+// Whole-file bytes for the PDF, Word and Excel viewers. Capped so one request cannot exhaust memory.
+const BYTES_MAX = 512 * 1024 * 1024
+ipcMain.handle('file:read-bytes', (_e, p) => {
+  need(p)
+  const st = fs.statSync(p)
+  if (!st.isFile()) throw new Error('not a file')
+  if (st.size > BYTES_MAX) throw new Error('file too large to open')
+  return fs.readFileSync(p)
+})
 ipcMain.handle('file:read-image', (_e, p) => {
+  need(p)
   try {
     const ext = path.extname(p).slice(1).toLowerCase().replace('jpg', 'jpeg').replace('svg', 'svg+xml')
     return `data:image/${ext};base64,${fs.readFileSync(p).toString('base64')}`
@@ -237,10 +363,14 @@ ipcMain.handle('file:read-image', (_e, p) => {
   }
 })
 ipcMain.handle('file:save-image', (_e, dir, name, base64) => {
+  // A plain file name only: no separators, no '..', no drive letters. Nothing from the page can write outside assets/.
+  if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(name) || name.includes('..')) throw new Error('bad image name')
   const out = path.join(dir, 'assets')
+  const target = path.join(out, name)
+  if (!grants.isAssetWrite(target)) need(target) // a granted file may write images to its own assets/ folder
   fs.mkdirSync(out, { recursive: true })
   const dest = path.join(out, name)
-  fs.writeFileSync(dest, Buffer.from(base64, 'base64'))
+  fs.writeFileSync(dest, Buffer.from(base64, 'base64'), { flag: 'wx' }) // never overwrite an image that is already there
   return 'assets/' + name
 })
 ipcMain.handle('export:html', async (_e, html, suggested) => {
@@ -275,8 +405,40 @@ ipcMain.handle('app:confirm', async (_e, message, detail, buttons) => {
   return r.response
 })
 ipcMain.handle('app:devtools', () => win && win.webContents.toggleDevTools())
+// The one non-web link that leaves the app: the Windows Default apps page. A fixed string, nothing from the renderer, Windows only.
+ipcMain.on('edit:paste', (e) => e.sender.paste())
+ipcMain.handle('app:open-default-apps', async () => {
+  if (process.platform !== 'win32') return false
+  try {
+    await shell.openExternal('ms-settings:defaultapps?registeredAppUser=Plume')
+    return true
+  } catch {
+    return false
+  }
+})
 
-const gotLock = app.requestSingleInstanceLock()
+// Developer menu items: one fixed file in userData, created with an example on first use. No argument, so the renderer cannot choose a path.
+// The renderer validates the entries; only a fixed list of actions is allowed there.
+const MENU_ITEMS_EXAMPLE = JSON.stringify([
+  { id: 'zoom-reset', label: 'Back to normal size', action: 'command', value: 'view.zoomReset' },
+  { id: 'greeting', label: 'Insert greeting', action: 'insertText', value: 'Hello,' },
+  { id: 'pick-file', label: 'Open a file', action: 'openFile' },
+], null, 2)
+ipcMain.handle('app:menu-items', () => {
+  try {
+    const f = path.join(app.getPath('userData'), 'commands.json')
+    if (!fs.existsSync(f)) fs.writeFileSync(f, MENU_ITEMS_EXAMPLE + '\n')
+    const st = fs.statSync(f)
+    if (!st.isFile() || st.size > 65536) return null
+    return fs.readFileSync(f, 'utf8')
+  } catch {
+    return null
+  }
+})
+
+// QA only: PLUME_USER_DATA gives this copy its own profile and skips the single-instance lock, so several copies can be tested at once.
+if (QA && process.env.PLUME_USER_DATA) app.setPath('userData', process.env.PLUME_USER_DATA)
+const gotLock = QA && process.env.PLUME_USER_DATA ? true : app.requestSingleInstanceLock()
 if (!gotLock) app.quit()
 else {
   app.on('second-instance', (_e, argv) => {
@@ -284,10 +446,13 @@ else {
     if (win) {
       if (win.isMinimized()) win.restore()
       win.focus()
-      if (f) win.webContents.send('open-path', f)
+      if (f) { grantQuiet(f); win.webContents.send('open-path', f) } // a file the OS asked us to open
     }
   })
   app.whenReady().then(() => {
+    // Reload what the user opened before, so restored tabs and the last folder still open. Then the file the OS launched us with.
+    grants.configure(path.join(app.getPath('userData'), 'grants.json'))
+    if (pendingOpen) grantQuiet(pendingOpen)
     pluginsIpc && pluginsIpc.register({ app, ipcMain, shell, protocol: require('electron').protocol })
     themesIpc && themesIpc.register({ app, ipcMain, shell })
     updaterIpc && updaterIpc.register({ app, ipcMain, shell, getWindow: () => win })

@@ -42,9 +42,11 @@ export function init(app) {
     return n
   }
 
+  const title = $('#app-title')
   function renderCrumb() {
     crumb.textContent = ''
     const d = doc()
+    if (title) title.textContent = d ? (d.name || (d.path ? baseName(d.path) : '') || 'Untitled') + ' - Plume' : 'Plume'
     if (!d) return
     if (d.path) {
       const parts = d.path.split(/[\\/]/).filter(Boolean)

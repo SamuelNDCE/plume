@@ -75,7 +75,7 @@ export function createCodeEditor(host, { onChange, onLanguage } = {}) {
   const numsExt = () => (opts.lineNumbers ? lineNumbers() : [])
   const wrapExt = () => (opts.wrap ? EditorView.lineWrapping : [])
   // Spellcheck is on only for prose files (decided by the caller); code never gets red underlines.
-  const spellExt = () => EditorView.contentAttributes.of({ spellcheck: opts.spellcheck ? 'true' : 'false' })
+  const spellExt = () => EditorView.contentAttributes.of({ spellcheck: opts.spellcheck ? 'true' : 'false', 'aria-label': 'Document' })
 
   const chrome = EditorView.theme({
     '&': { height: '100%', backgroundColor: 'transparent', color: 'var(--fg)' },
@@ -88,7 +88,7 @@ export function createCodeEditor(host, { onChange, onLanguage } = {}) {
     '.cm-content': { caretColor: 'var(--accent)', padding: '12px 0' },
     '.cm-line': { padding: '0 14px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
-    '.cm-selectionBackground': { background: 'color-mix(in srgb, var(--accent) 22%, transparent)' },
+    '.cm-selectionBackground': { background: 'color-mix(in srgb, var(--accent) 36%, transparent)' },
     '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
       background: 'color-mix(in srgb, var(--accent) 32%, transparent)',
     },
@@ -98,6 +98,8 @@ export function createCodeEditor(host, { onChange, onLanguage } = {}) {
       border: 'none',
       borderRight: '1px solid var(--border)',
     },
+    // Fixed number width (up to 99,999 lines) with tabular digits, so the text does not shift as numbers gain digits.
+    '.cm-lineNumbers .cm-gutterElement': { minWidth: '5ch', textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
     '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--hover) 60%, transparent)' },
     '.cm-activeLineGutter': {
       backgroundColor: 'color-mix(in srgb, var(--hover) 80%, transparent)',

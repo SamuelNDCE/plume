@@ -1,4 +1,5 @@
 import logoUrl from '../assets/plume-logo.svg'
+import { FILE_TYPES } from './filetypes.js'
 // Settings modal. Every control writes immediately via app.settings.set.
 const CHART_COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2']
 const FALLBACK_THEMES = [
@@ -16,9 +17,13 @@ const DEFAULTS = {
   sidebarWidth: 260, fontSize: 17, fontFamily: 'theme', maxWidth: 820, autosave: true, checkUpdates: true,
   spellcheck: true, lineNumbersSource: true, wrapSource: true, lineHeight: 1.7, zen: false,
   fontBody: '', fontHeading: '', fontMono: '', headingScale: 0, paraSpacing: 0, accent: '',
-  customCss: '', chartStyle: '', pluginsConsent: false,
+  customCss: '', chartStyle: '', pluginsConsent: false, defaultAppPrompted: false, hiddenRecents: [],
+  logOnOpen: true, freezeFirstRow: true, defaultZoom: 100,
 }
-const SECTIONS = ['Appearance', 'Typography', 'Editor', 'Files', 'Plugins', 'Shortcuts', 'About']
+// Not shown as controls on purpose: sidebarTab and sidebarWidth (set by using the sidebar), sidebarClosedByDefault (one-time migration flag),
+// fontFamily (legacy, replaced by the three font pickers).
+const IS_WIN = !!(window.folio && window.folio.platform === 'win32')
+const SECTIONS = ['Appearance', 'Typography', 'Editing', 'Files', 'Logs', 'Spreadsheets', 'Plugins', ...(IS_WIN ? ['Windows'] : []), 'Advanced', 'Shortcuts', 'About']
 const FONT_PRESETS = [
   ['', 'Theme default'],
   ['system-ui, -apple-system, "Segoe UI", sans-serif', 'System UI'],
@@ -356,14 +361,11 @@ export function init(app) {
         if (p.valid === false) sw.disabled = true
         sw.addEventListener('click', async () => {
           const on = sw.getAttribute('aria-checked') !== 'true'
-          if (on && !S.get('pluginsConsent')) {
-            let r = 1
-            const details = (p.name || p.id) + (p.permissions && p.permissions.length ? '\nPermissions: ' + p.permissions.join(', ') : '') + '\n\nThis plugin will run code inside Plume with access to your open documents. Only enable plugins you trust.'
-            try { r = await window.folio.confirm('Enable plugin?', details, ['Enable', 'Cancel']) } catch { r = 1 }
-            if (r !== 0) return
-            S.set('pluginsConsent', true)
-          }
-          try { await api.setPluginEnabled(p.id, on) } catch { app.toast('Could not change plugin'); return }
+          // The main process asks for consent when enabling (electron/plugins-ipc.cjs); a cancelled dialog returns false.
+          let done = false
+          try { done = await api.setPluginEnabled(p.id, on) } catch { app.toast('Could not change plugin'); return }
+          if (on && !done) return
+          if (on) S.set('pluginsConsent', true)
           sw.setAttribute('aria-checked', String(on))
           note.hidden = false
           app.toast('Restart Plume to apply')
@@ -385,7 +387,20 @@ export function init(app) {
       btn('Open plugins folder', '', () => { try { api.openPluginsFolder() } catch {} }),
       btn('Refresh list', '', draw)
     )
-    f.append(warn, note, list, tools, el('div', 'st-desc', 'Writing a plugin? See docs/PLUGINS.md.'))
+    const consentText = el('span', 'st-muted')
+    const consentBtn = btn('Withdraw consent', '', () => {
+      S.set('pluginsConsent', false)
+      note.hidden = false
+      app.toast('Restart Plume to apply')
+    })
+    const consentWrap = el('div', 'st-slider')
+    consentWrap.append(consentText, consentBtn)
+    refreshers.push(() => {
+      const on = !!S.get('pluginsConsent')
+      consentText.textContent = on ? 'Plugins allowed' : 'Not allowed yet'
+      consentBtn.disabled = !on
+    })
+    f.append(warn, row('Plugin consent', 'Plugins load at startup only after you enable one and agree. Withdrawing stops them loading at the next start.', consentWrap), note, list, tools, el('div', 'st-desc', 'Writing a plugin? See docs/PLUGINS.md.'))
     draw()
     return f
   }
@@ -395,6 +410,7 @@ export function init(app) {
     const g = group('Text')
     g.append(
       slider('fontSize', 'Font size', 11, 32, 1, (v) => v + ' px'),
+      slider('defaultZoom', 'Default zoom', 70, 200, 5, (v) => v + '%'),
       slider('lineHeight', 'Line height', 1.3, 2.2, 0.05, (v) => v.toFixed(2)),
       slider('maxWidth', 'Content width', 480, 1400, 20, (v) => v + ' px')
     )
@@ -416,23 +432,6 @@ export function init(app) {
       resetSlider('headingScale', 'Heading scale', 'Size of headings relative to body.', 0.9, 1.4, 0.05, (v) => v.toFixed(2) + 'x', 1.1),
       resetSlider('paraSpacing', 'Paragraph spacing', 'Space between paragraphs.', 0.4, 1.6, 0.05, (v) => v.toFixed(2) + ' em', 1)
     )
-    const ga = group('Advanced: custom CSS')
-    ga.appendChild(el('div', 'st-desc', CSS_NOTE))
-    const ta = el('textarea', 'st-css')
-    ta.spellcheck = false
-    ta.rows = 8
-    ta.setAttribute('aria-label', 'Custom CSS')
-    ta.placeholder = '.milkdown .ProseMirror h1 { letter-spacing: -0.02em; }'
-    let tmr = null
-    ta.addEventListener('input', () => {
-      clearTimeout(tmr)
-      tmr = setTimeout(() => S.set('customCss', ta.value), 300)
-    })
-    ta.value = S.get('customCss') || ''
-    const clr = btn('Clear', '', () => { clearTimeout(tmr); ta.value = ''; S.set('customCss', '') })
-    const cr = el('div', 'st-presets')
-    cr.appendChild(clr)
-    ga.append(ta, cr)
     const g2 = group('Preview')
     const p = el('div', 'st-preview')
     p.appendChild(el('h4', null, 'The quiet craft of writing'))
@@ -454,7 +453,71 @@ export function init(app) {
     p.appendChild(el('p', null, 'Inline code looks like this:'))
     p.lastChild.appendChild(el('code', null, ' const x = 1'))
     g2.appendChild(p)
-    f.append(g, gf, g2, ga)
+    f.append(g, gf, g2)
+    return f
+  }
+
+  function secAdvanced() {
+    const f = el('div')
+    const ga = group('Custom CSS')
+    ga.appendChild(el('div', 'st-desc', CSS_NOTE))
+    const ta = el('textarea', 'st-css')
+    ta.spellcheck = false
+    ta.rows = 8
+    ta.setAttribute('aria-label', 'Custom CSS')
+    ta.placeholder = '.milkdown .ProseMirror h1 { letter-spacing: -0.02em; }'
+    let tmr = null
+    ta.addEventListener('input', () => {
+      clearTimeout(tmr)
+      tmr = setTimeout(() => S.set('customCss', ta.value), 300)
+    })
+    ta.value = S.get('customCss') || ''
+    const clr = btn('Clear', '', () => { clearTimeout(tmr); ta.value = ''; S.set('customCss', '') })
+    const cr = el('div', 'st-presets')
+    cr.appendChild(clr)
+    ga.append(ta, cr)
+    const gn = group('Network')
+    gn.appendChild(toggle('checkUpdates', 'Check for updates on launch', 'Plume asks GitHub once at startup whether a newer version exists. Turn off for zero network activity.'))
+    f.append(ga, gn)
+    return f
+  }
+
+  function secLogs() {
+    const g = group('Log files')
+    g.appendChild(toggle('logOnOpen', 'Open log files in the log view', 'Files ending in .log, .out or .err, and text that looks like a log, open with levels, filtering and follow. Turn off to open them as plain text.'))
+    const f = el('div')
+    f.appendChild(g)
+    return f
+  }
+
+  function secSheets() {
+    const g = group('CSV, TSV and Excel')
+    g.appendChild(toggle('freezeFirstRow', 'Freeze the first row', 'Keep the header row visible while you scroll. Applies to grids opened from now on; the Freeze button in a grid still changes that one grid.'))
+    const f = el('div')
+    f.appendChild(g)
+    return f
+  }
+
+  function secWindows() {
+    const f = el('div')
+    const g = group('Default apps')
+    const types = FILE_TYPES
+    g.appendChild(row('Open Windows Default apps', 'Windows asks you to confirm each file type, because Windows does not let an app set its own defaults.', btn('Open Windows Default apps', '', () => window.folio.openDefaultApps())))
+    const again = row('Default app prompt', 'The first-run bubble that offers this. Show it again in the sidebar.', btn('Show again', '', () => {
+      S.set('defaultAppPrompted', false)
+      app.toast('The prompt will appear when Plume restarts')
+    }))
+    g.appendChild(again)
+    const list = el('div', 'st-types')
+    list.setAttribute('role', 'list')
+    for (const t of types) {
+      const r = el('div', 'st-type')
+      r.setAttribute('role', 'listitem')
+      r.append(el('span', 'st-type-ext', '.' + t.ext), el('span', 'st-type-name', t.name), el('span', 'st-muted', 'Choose Plume in Windows settings'))
+      list.appendChild(r)
+    }
+    g.appendChild(list)
+    f.appendChild(g)
     return f
   }
 
@@ -486,18 +549,28 @@ export function init(app) {
     const g = group('Saving')
     g.appendChild(toggle('autosave', 'Autosave', 'Save changes automatically after you stop typing.'))
     const g2 = group('Data')
+    const hiddenBtn = btn('Show all', '', () => { S.set('hiddenRecents', []); app.toast('Hidden recent files are showing again') })
+    const hiddenDesc = el('span', 'st-muted')
+    const hiddenWrap = el('div', 'st-slider')
+    hiddenWrap.append(hiddenDesc, hiddenBtn)
+    refreshers.push(() => {
+      const n = (S.get('hiddenRecents') || []).length
+      hiddenDesc.textContent = n + ' hidden'
+      hiddenBtn.disabled = !n
+    })
     g2.append(
       row('Clear recent files', 'Forget the list of recently opened files.', btn('Clear', '', () => {
         try { localStorage.removeItem('folio.recent') } catch {}
         app.toast('Recent files cleared')
       })),
+      row('Hidden recent files', 'Files you removed from the recent list with the x button.', hiddenWrap),
       row('Reset all settings', 'Restore every setting to its default.', btn('Reset', 'danger', async () => {
         let r = 0
         try {
           r = await window.folio.confirm('Reset all settings?', 'This restores the defaults for every setting.', ['Reset', 'Cancel'])
         } catch { r = 0 }
         if (r !== 0) return
-        for (const k of Object.keys(DEFAULTS)) S.set(k, DEFAULTS[k])
+        for (const k of Object.keys(DEFAULTS)) if (k !== 'defaultAppPrompted' && k !== 'hiddenRecents' && k !== 'pluginsConsent') S.set(k, DEFAULTS[k])
         if (app.themes && app.themes.apply) { try { app.themes.apply('light') } catch {} }
         app.toast('Settings reset')
       }))
@@ -646,7 +719,7 @@ export function init(app) {
     return f
   }
 
-  const BUILD = { Appearance: secAppearance, Typography: secTypography, Editor: secEditor, Files: secFiles, Plugins: secPlugins, Shortcuts: secShortcuts, About: secAbout }
+  const BUILD = { Appearance: secAppearance, Typography: secTypography, Editing: secEditor, Files: secFiles, Logs: secLogs, Spreadsheets: secSheets, Windows: secWindows, Advanced: secAdvanced, Plugins: secPlugins, Shortcuts: secShortcuts, About: secAbout }
 
   function show(name) {
     current = name
@@ -734,6 +807,10 @@ export function init(app) {
     if (prevFocus && prevFocus.focus) try { prevFocus.focus() } catch {}
   }
 
-  app.bus.on('settings:change', () => { if (overlay) refresh() })
+  app.bus.on('settings:change', (e) => {
+    // Default zoom is a percentage of the 17 px base: applying it sets the font size at once (Ctrl+0 returns to it).
+    if (e && e.key === 'defaultZoom') S.set('fontSize', Math.round((17 * Number(e.value)) / 100))
+    if (overlay) refresh()
+  })
   app.commands.register({ id: 'settings.open', title: 'Open Settings', category: 'App', keys: 'Ctrl+,', run: open })
 }

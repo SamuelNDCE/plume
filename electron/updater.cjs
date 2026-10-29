@@ -1,6 +1,7 @@
 // In-app updates, backed by GitHub Releases (electron-updater).
 // Nothing here runs on its own: the renderer asks for a check (on launch if the user left "Check for updates" on,
 // or from Settings / the command palette). No check means no network request.
+const { app } = require('electron')
 const RELEASES_URL = 'https://github.com/SamuelNDCE/plume/releases/latest'
 
 let state = { state: 'idle', current: '', canInstall: false }
@@ -31,7 +32,7 @@ function load() {
   updater.autoDownload = false
   updater.autoInstallOnAppQuit = true
   updater.allowPrerelease = false
-  const testUrl = process.env.PLUME_UPDATE_URL // test hook: point at a local generic feed
+  const testUrl = app.isPackaged ? undefined : process.env.PLUME_UPDATE_URL // test hook: point at a local generic feed
   if (testUrl) {
     updater.forceDevUpdateConfig = true
     updater.setFeedURL({ provider: 'generic', url: testUrl })
@@ -46,7 +47,7 @@ function load() {
 }
 
 function register({ app, ipcMain, shell, getWindow }) {
-  const active = () => app.isPackaged || !!process.env.PLUME_UPDATE_URL
+  const active = () => app.isPackaged || !!(app.isPackaged ? undefined : process.env.PLUME_UPDATE_URL)
   state = { ...state, current: app.getVersion(), canInstall: canSelfInstall(), supported: active() }
 
   ipcMain.handle('update:get', () => {
