@@ -1023,7 +1023,10 @@ export class Sheet {
     this.eol = eol
     this.bom = bom
     this.trailingEol = trailingEol
-    this.ncols = Math.max(1, ...this.rows.map((r) => r.length))
+    // a loop, not Math.max(...spread): spreading hundreds of thousands of rows overflows the call stack
+    let widest = 1
+    for (const r of this.rows) if (r.length > widest) widest = r.length
+    this.ncols = widest
     this.baseRows = this.rows.length
     this.baseCols = this.ncols
     this.undoStack = []

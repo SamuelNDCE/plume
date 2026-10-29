@@ -15,6 +15,8 @@ const MIN_W = 36
 const MAX_FIT = 480
 const BUF_R = 12
 const BUF_C = 3
+const SPARE_ROWS = 20
+const SPARE_COLS = 5
 const MAXR = 1048576
 const MAXC = 16384
 const LARGE_CELLS = 1000000
@@ -77,7 +79,7 @@ export async function mount(host, opts, ctx) {
 
   // ---------------------------------------------------------------- state
   let header = detectHeader(sheet.rows)
-  let freeze = true
+  let freeze = !(ctx && ctx.freezeFirst && ctx.freezeFirst() === false)
   let widths = []
   let formats = [] // per column display format (session only)
   const filters = new Map() // col -> { text, hide:Set }
@@ -90,8 +92,12 @@ export async function mount(host, opts, ctx) {
   let gutterW = 44
   let bodyW = 0
   let bodyH = 0
-  let padR = 100 // extra virtual rows
-  let padC = 26 // extra virtual columns
+  // Empty rows/columns drawn past the data: at least SPARE_ROWS / SPARE_COLS (typing or pasting past them grows the data, so the margin follows),
+  // and enough to fill the visible pane so there is no blank band. layout() sets them.
+  let padR = SPARE_ROWS
+  let padC = SPARE_COLS
+  let growR = 0 // extra view-only rows added by scrolling near the end (never saved: only data and typed cells are)
+  let growC = 0
   let win = null // rendered window { c0, c1, r0, r1 }
   let ox = 0
   let oy = 0
@@ -186,7 +192,7 @@ export async function mount(host, opts, ctx) {
     const b = h('button', 'sh-btn')
     b.type = 'button'
     b.title = title
-    b.setAttribute('aria-label', title)
+    b.setAttribute('aria-label', label ? label + ', ' + title : title) // keep the visible text inside the name
     if (ico) b.append(icon(ico))
     if (label) b.append(h('span', null, label))
     b.addEventListener('click', () => {
@@ -407,8 +413,25 @@ export async function mount(host, opts, ctx) {
 
   // ---------------------------------------------------------------- layout & render
   function layout() {
-    padC = Math.max(padC, 26, Math.ceil(grid.clientWidth / 60) + 6)
-    padR = Math.min(Math.max(padR, 100, Math.ceil(grid.clientHeight / ROW_H) + 20), Math.max(0, MAXR - sheet.rowCount))
+    padR = SPARE_ROWS
+    padC = SPARE_COLS
+    const gutterEst = Math.max(44, String(sheet.rowCount).length * 9 + 18)
+    padR = Math.max(SPARE_ROWS + growR, Math.ceil((grid.clientHeight - HEAD_H) / ROW_H) + 1 - sheet.rowCount)
+    padR = Math.min(padR, Math.max(0, MAXR - sheet.rowCount))
+    {
+      ensureWidths()
+      const base = Math.min(MAXC, sheet.ncols + SPARE_COLS + growC)
+      while (widths.length < base) widths.push(DEF_W)
+      let acc = 0
+      for (let c = 0; c < base; c++) acc += widths[c]
+      let c = base
+      while (gutterEst + acc < grid.clientWidth + 1 && c < MAXC) {
+        if (widths.length <= c) widths.push(DEF_W)
+        acc += widths[c]
+        c++
+      }
+      padC = Math.max(SPARE_COLS + growC, c - sheet.ncols)
+    }
     recalcCols()
     gutterW = Math.max(44, String(sheet.rowCount).length * 9 + 18)
     const tn = topN()
@@ -460,14 +483,14 @@ export async function mount(host, opts, ctx) {
     const vc1 = colAt(sx + bodyW)
     const vr0 = tn + Math.floor(sy / ROW_H)
     const vr1 = Math.min(dc - 1, tn + Math.floor((sy + bodyH) / ROW_H))
-    // grow the virtual extent when the user scrolls near its end
+    // scrolling close to the end adds another SPARE_ROWS rows / SPARE_COLS columns (view only, bounded by the Excel limits)
     let grew = false
-    if (vr1 >= dc - 30 && vRows() < MAXR) {
-      padR += 200
+    if (sy > 0 && vr1 >= dc - 3 && vRows() < MAXR) {
+      growR += SPARE_ROWS
       grew = true
     }
-    if (vc1 >= vCols() - 4 && vCols() < MAXC) {
-      padC += 26
+    if (sx > 0 && vc1 >= vCols() - 2 && vCols() < MAXC) {
+      growC += SPARE_COLS
       grew = true
     }
     if (grew) {
@@ -550,7 +573,7 @@ export async function mount(host, opts, ctx) {
       buildRow(d, top, bf)
       const r = toData(d)
       const g = h('div', 'sh-rh', String(r + 1))
-      g.setAttribute('role', 'rowheader')
+      g.setAttribute('aria-hidden', 'true') // row numbers are visual; each row carries aria-rowindex
       g.style.top = top + 'px'
       rowRefs.push([g, r])
       gf.append(g)
@@ -1031,7 +1054,8 @@ export async function mount(host, opts, ctx) {
       matrix = clip.rows.map((row) => row.map((v) => shiftFormula(v, dr, dc)))
     } else matrix = parseCsv(text, '\t').rows
     if (!matrix.length) return
-    const mw = Math.max(...matrix.map((r) => r.length))
+    let mw = 0
+    for (const r of matrix) if (r.length > mw) mw = r.length
     const ch = []
     // one value pasted over a bigger selection fills the selection
     if (matrix.length === 1 && matrix[0].length === 1 && (R.r1 > R.r0 || R.c1 > R.c0)) {

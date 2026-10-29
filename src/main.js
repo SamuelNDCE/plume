@@ -41,7 +41,16 @@ const baseName = (p) => p.split(/[\\/]/).pop()
 const dirName = (p) => p.slice(0, Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')))
 // A new text file ends lines the way the platform does (Notepad writes CRLF on Windows); Markdown stays LF.
 const defaultEol = (kind) => (kind === 'text' && /Win/i.test(navigator.platform) ? 'crlf' : 'lf')
-const kindOf = (name) => (MD_RE.test(name) ? 'md' : IMG_RE.test(name) ? 'image' : /\.(csv|tsv)$/i.test(name) ? 'table' : 'text')
+// PDF, Word and Excel open in their own viewers (src/modules/docviewer.js). They are read only: the bytes are never written back.
+const BINARY_KINDS = new Set(['pdf', 'docx', 'xlsx'])
+const kindOf = (name) =>
+  MD_RE.test(name) ? 'md'
+  : IMG_RE.test(name) ? 'image'
+  : /\.pdf$/i.test(name) ? 'pdf'
+  : /\.docx$/i.test(name) ? 'docx'
+  : /\.xlsx$/i.test(name) ? 'xlsx'
+  : /\.(csv|tsv)$/i.test(name) ? 'table'
+  : 'text'
 const doc = () => app.state.tabs[app.state.active]
 
 /* ---------- views ---------- */
@@ -49,7 +58,7 @@ const doc = () => app.state.tabs[app.state.active]
 function show(view) {
   scrollEl.hidden = view !== 'wysiwyg'
   cmHost.hidden = view !== 'source'
-  viewerHost.hidden = view !== 'table' && view !== 'image'
+  viewerHost.hidden = view !== 'table' && view !== 'image' && view !== 'viewer'
   emptyEl.hidden = view !== 'empty'
   app.state.mode = view
   document.body.dataset.view = view
@@ -105,7 +114,7 @@ async function mountRich(markdown) {
   const c = new Crepe({
     root: editorEl,
     defaultValue: markdown,
-    features: { [Crepe.Feature.Latex]: true },
+    features: { [Crepe.Feature.Latex]: true, [Crepe.Feature.Toolbar]: false }, // selection toolbar is ours: quick bar in modules/contextmenu.js
     featureConfigs: {
       [Crepe.Feature.Placeholder]: { text: 'Start writing…  Type / for commands', mode: 'doc' },
       [Crepe.Feature.ImageBlock]: { onUpload: upload, inlineOnUpload: upload, blockOnUpload: upload },
@@ -134,7 +143,10 @@ async function mountRich(markdown) {
   const d = doc()
   if (d && !d.dirty) d.content = d.saved = c.getMarkdown() // Crepe re-serialises; a clean file must not look modified
   const pm = editorEl.querySelector('.ProseMirror')
-  if (pm) pm.setAttribute('spellcheck', String(app.settings.get('spellcheck')))
+  if (pm) {
+    pm.setAttribute('spellcheck', String(app.settings.get('spellcheck')))
+    pm.setAttribute('aria-label', 'Document')
+  }
   applyImagePaths()
   app.bus.emit('editor:ready', { root: editorEl })
 }
@@ -183,6 +195,7 @@ async function mountSheetFor(d) {
       { name: d.name, text: d.content, delimiter: /\.tsv$/i.test(d.name) ? '\t' : undefined },
       {
         toast: (m) => app.toast(m),
+        freezeFirst: () => app.settings.get('freezeFirstRow') !== false,
         setText(t) {
           // no 'is this the active doc' guard: the grid flushes a last edit while a tab switch tears it down
           d.content = t
@@ -206,6 +219,37 @@ async function mountSheetFor(d) {
   }
 }
 
+// Log files (.log .out .err, or log-like text) open in the log view. Their text stays live on the doc.
+async function mountLogFor(d) {
+  const token = ++sheetToken
+  viewerHost.textContent = ''
+  try {
+    const { mount } = await import('./modules/logview.js')
+    const view = await mount(viewerHost, d, { api, toast: (m) => app.toast(m), raw: () => toggleSource() })
+    if (token !== sheetToken || doc() !== d) {
+      view && view.destroy && view.destroy()
+      return
+    }
+    activeSheet = view
+  } catch (e) {
+    console.error('[logview]', e)
+    if (token !== sheetToken) return
+    const box = document.createElement('div')
+    box.className = 'viewer-error'
+    box.textContent = 'Could not open ' + d.name + ': ' + ((e && e.message) || e)
+    viewerHost.appendChild(box)
+  }
+}
+async function detectLog(name, text) {
+  if (app.settings.get('logOnOpen') === false) return false
+  try {
+    const { shouldUseLogMode } = await import('./modules/logview.js')
+    return shouldUseLogMode(name, text)
+  } catch {
+    return false
+  }
+}
+
 // Spellcheck in the source view only for prose files (Markdown, .txt, .log, untitled), never for code.
 const PROSE_RE = /\.(txt|text|log|md|markdown|mdown|mkd)$/i
 const spellOn = (d) => !!app.settings.get('spellcheck') && !!d && (d.kind === 'md' || d.kind === 'text') && (PROSE_RE.test(d.name || '') || /^Untitled/.test(d.name || ''))
@@ -220,6 +264,13 @@ async function render() {
     app.bus.emit('empty:show')
     return
   }
+  if (BINARY_KINDS.has(d.kind)) {
+    await destroyRich()
+    show('viewer')
+    const { mountDocument } = await import('./modules/docviewer.js')
+    await mountDocument(viewerHost, d, app)
+    return
+  }
   if (d.kind === 'image') {
     await destroyRich()
     show('image')
@@ -231,6 +282,12 @@ async function render() {
     await destroyRich()
     show('table')
     await mountSheetFor(d)
+    return
+  }
+  if (d.kind === 'text' && d.log && d.view !== 'source') {
+    await destroyRich()
+    show('table')
+    await mountLogFor(d)
     return
   }
   if (d.kind === 'md' && d.view !== 'source') {
@@ -256,7 +313,7 @@ function getMarkdown() {
 // Pull the live editor text into the doc record.
 function syncActive() {
   const d = doc()
-  if (!d || d.kind === 'image' || (d.kind === 'table' && app.state.mode === 'table')) return
+  if (!d || d.kind === 'image' || d.kind === 'xlsx' || (d.kind === 'table' && app.state.mode === 'table')) return
   if (app.state.mode === 'wysiwyg' && crepe) d.content = crepe.getMarkdown()
   else if (app.state.mode === 'source' && code) d.content = code.getValue()
   d.dirty = d.content !== d.saved
@@ -290,6 +347,8 @@ function rememberRecent(p) {
   try {
     const r = JSON.parse(localStorage.getItem('folio.recent') || '[]').filter((x) => x !== p)
     r.unshift(p)
+    const hr = app.settings.get('hiddenRecents') || []
+    if (hr.includes(p)) app.settings.set('hiddenRecents', hr.filter((q) => q !== p))
     localStorage.setItem('folio.recent', JSON.stringify(r.slice(0, 12)))
   } catch {}
 }
@@ -333,7 +392,7 @@ async function openPath(p) {
     const kind = kindOf(name)
     const st = await api.stat(p)
     // Very large text files would freeze the window. Above FULL_OPEN_MAX they open as a read-only preview of the start.
-    const preview = kind !== 'image' && st?.size > FULL_OPEN_MAX
+    const preview = kind !== 'image' && !BINARY_KINDS.has(kind) && st?.size > FULL_OPEN_MAX
     if (preview) {
       const mb = (n) => (n / 1048576).toFixed(0)
       const r = await api.confirm(
@@ -344,15 +403,22 @@ async function openPath(p) {
       if (r !== 0) return
     }
     let d
-    if (kind === 'image') {
+    if (BINARY_KINDS.has(kind)) {
+      d = { name, kind, view: 'rich', path: p, content: '', saved: '', dirty: false, bytes: await api.readBytes(p), readOnly: kind !== 'xlsx' }
+    } else if (kind === 'image') {
       d = { name, kind, view: 'rich', path: p, content: '', saved: '', dirty: false, dataUrl: await api.readImage(p) }
     } else {
       const f = await api.readFile(p, preview ? { maxBytes: PREVIEW_BYTES } : {})
       if (f.binary) return app.toast(`${name} is a binary file`)
       d = { name, kind, view: 'rich', path: p, content: f.content, saved: f.content, dirty: false, encoding: f.encoding || 'utf-8', eol: f.eol || defaultEol(kind), mixedEol: !!f.mixedEol }
       if (preview) Object.assign(d, { readOnly: true, view: 'source', truncated: f.truncated, totalSize: f.size })
+      if (kind === 'text' && (d.log = await detectLog(name, f.content))) {
+        d.view = 'rich'
+        if (!preview) d.logSize = f.size
+      }
     }
     d.mtime = st?.mtimeMs
+    d.size = st?.size
     // replace a pristine empty untitled doc
     if (app.state.tabs.length === 1 && !doc().path && !doc().content && !doc().dirty) app.state.tabs = []
     rememberRecent(p)
@@ -369,15 +435,69 @@ async function openFile() {
 async function saveDoc(d, forceAs = false) {
   if (d.kind === 'image') return true
   // A read-only preview holds only the start of a file: writing it would truncate the real file. Checked before any write.
-  if (d.readOnly) {
+  if (d.readOnly || d.truncated) {
     app.toast('Read-only preview: nothing was saved')
     return false
   }
   if (d === doc()) syncActive()
+  // Nothing was edited: leave the file on disk alone (a rewrite would also normalise its line endings or encoding). Save As still writes.
+  if (!d.dirty && !forceAs && d.path) return true
+  // The file changed on disk since it was opened (or since this tab was last saved): never overwrite it silently.
+  if (d.path && !forceAs && d.mtime) {
+    const now = await api.stat(d.path)
+    if (now && (now.mtimeMs !== d.mtime || (!d.log && d.size != null && now.size !== d.size))) {
+      const r = await api.confirm(
+        `${d.name} changed on disk`,
+        'Another program changed this file after Plume opened it. Saving here would overwrite those changes. Save As keeps both versions.',
+        ['Save As', 'Overwrite', 'Reload from disk', 'Cancel'],
+      )
+      if (r === 1) { /* overwrite: go on */ }
+      else if (r === 0) forceAs = true
+      else if (r === 2) {
+        try {
+          const f = await api.readFile(d.path)
+          if (f.binary) return false
+          d.content = d.saved = f.content
+          d.encoding = f.encoding || d.encoding
+          d.eol = f.eol || d.eol
+          d.dirty = false
+          d.mtime = now.mtimeMs
+          d.size = now.size
+          if (d === doc()) await render()
+          updateTitle()
+          app.bus.emit('tab:list', app.state.tabs)
+        } catch {}
+        return false
+      } else return false
+    }
+  }
   let p = d.path
   if (!p || forceAs) {
     p = await api.saveDialog(d.path || d.name)
     if (!p) return false
+  }
+  if (d.kind === 'xlsx') {
+    // Excel workbook: the viewer module patches the edited cells into the original zip and returns the bytes.
+    try {
+      const x = await import('./modules/xlsxview.js')
+      const bytes = await x.saveXlsx(d)
+      await api.writeBytes(p, bytes)
+      x.commitXlsx(d, bytes)
+    } catch (e) {
+      app.toast(String((e && e.message) || 'Save failed').slice(0, 160))
+      return false
+    }
+    d.path = p
+    d.name = baseName(p)
+    d.dirty = false
+    const st = await api.stat(p)
+    d.mtime = st?.mtimeMs
+    d.size = st?.size
+    rememberRecent(p)
+    updateTitle()
+    app.bus.emit('tab:list', app.state.tabs)
+    app.bus.emit('file:saved', d)
+    return true
   }
   try {
     await api.writeFile(p, d.content, { encoding: d.encoding || 'utf-8', eol: d.eol || defaultEol(kindOf(baseName(p))) })
@@ -390,7 +510,10 @@ async function saveDoc(d, forceAs = false) {
   d.kind = kindOf(d.name) === 'image' ? 'text' : kindOf(d.name)
   d.saved = d.content
   d.dirty = false
-  d.mtime = (await api.stat(p))?.mtimeMs
+  const after = await api.stat(p)
+  d.mtime = after?.mtimeMs
+  d.size = after?.size
+  if (d.log) d.logSize = after?.size
   rememberRecent(p)
   updateTitle()
   app.bus.emit('tab:list', app.state.tabs)
@@ -452,7 +575,7 @@ async function toggleSource() {
   if (!d || d.kind === 'image') return
   syncActive()
   d.view = d.view === 'source' ? 'rich' : 'source'
-  if (d.kind === 'text' && d.view === 'rich') d.view = 'source'
+  if (d.kind === 'text' && d.view === 'rich' && !d.log) d.view = 'source'
   await render()
   app.bus.emit('mode:change', app.state.mode)
   app.bus.emit('doc:change', d.content)
@@ -482,7 +605,8 @@ function scheduleAutosave() {
   if (!app.settings.get('autosave')) return
   autosaveTimer = setTimeout(async () => {
     const d = doc()
-    if (d && d.path && d.dirty) await saveDoc(d)
+    // Autosave only writes text the user edited. Previews, images and binary documents (Excel included) are saved only by an explicit Save.
+    if (d && d.path && d.dirty && !d.readOnly && !d.truncated && d.kind !== 'image' && !BINARY_KINDS.has(d.kind)) await saveDoc(d)
   }, 1500)
 }
 function saveSession() {
@@ -491,7 +615,7 @@ function saveSession() {
       'folio.session',
       JSON.stringify({
         active: app.state.active,
-        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, truncated: !!t.truncated, totalSize: t.totalSize, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.dirty })),
+        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, log: !!t.log, truncated: !!t.truncated, totalSize: t.totalSize, mtime: t.mtime, size: t.size, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.kind === 'xlsx' ? false : t.dirty })),
       }),
     )
   } catch {}
@@ -504,6 +628,7 @@ async function restoreSession() {
       if (t.path && !t.dirty) {
         try {
           if (t.kind === 'image') app.state.tabs.push({ ...t, dataUrl: await api.readImage(t.path) })
+          else if (BINARY_KINDS.has(t.kind)) app.state.tabs.push({ ...t, bytes: await api.readBytes(t.path), readOnly: t.kind !== 'xlsx' })
           // a saved tab that is a preview, or whose file has grown past the limit, comes back as a read-only preview
           else if (t.readOnly || (await api.stat(t.path))?.size > FULL_OPEN_MAX) {
             // a read-only preview stays a preview across restarts: never load the whole file, and never save it
@@ -516,7 +641,7 @@ async function restoreSession() {
           } else {
             const f = await api.readFile(t.path)
             if (f.binary) continue
-            app.state.tabs.push({ ...t, content: f.content, saved: f.content, encoding: f.encoding || 'utf-8', eol: f.eol || t.eol || defaultEol(t.kind), mixedEol: !!f.mixedEol, mtime: (await api.stat(t.path))?.mtimeMs })
+            app.state.tabs.push({ ...t, logSize: t.log ? f.size : undefined, content: f.content, saved: f.content, encoding: f.encoding || 'utf-8', eol: f.eol || t.eol || defaultEol(t.kind), mixedEol: !!f.mixedEol, mtime: (await api.stat(t.path))?.mtimeMs })
           }
         } catch {}
       } else if (t.kind !== 'image') app.state.tabs.push({ ...t })
@@ -530,16 +655,19 @@ async function restoreSession() {
 }
 async function checkExternal() {
   const d = doc()
-  if (!d || !d.path || d.dirty || d.kind === 'image') return
+  if (!d || !d.path || d.dirty || d.readOnly || d.truncated || d.kind === 'image' || BINARY_KINDS.has(d.kind) || (d.log && d.following)) return
   const st = await api.stat(d.path)
   if (st && d.mtime && st.mtimeMs !== d.mtime) {
     try {
       const f = await api.readFile(d.path)
+      // the user may have typed (or switched tab) while the file was being read: never replace their text
+      if (d.dirty || d !== doc()) return
       if (f.content !== d.saved) {
         d.content = d.saved = f.content
         d.encoding = f.encoding || d.encoding
         d.eol = f.eol || d.eol
         d.mtime = st.mtimeMs
+        d.size = st.size
         await render()
         app.toast('Reloaded: file changed on disk')
       }
@@ -560,6 +688,13 @@ app.actions = {
   openFolder,
   refreshFolder,
   switchTab: activate,
+  // The Excel viewer reports unsaved edits here so the title and sidebar show the dirty dot.
+  setDirty(d, flag) {
+    if (!d || d.dirty === !!flag) return
+    d.dirty = !!flag
+    updateTitle()
+    app.bus.emit('tab:list', app.state.tabs)
+  },
   retarget,
   render,
   // Read the file again from disk as another code page (Notepad's "Reopen with encoding").
@@ -652,7 +787,8 @@ document.addEventListener('selectionchange', () => {
     drag = false
   })
   window.addEventListener('mousemove', (e) => {
-    if (drag) $('#sidebar').style.width = Math.min(520, Math.max(180, e.clientX)) + 'px'
+    // The icon rail sits to the left of the sidebar, so the sidebar's width is the pointer position minus the rail's width.
+    if (drag) $('#sidebar').style.width = Math.min(520, Math.max(180, e.clientX - ($('#rail') ? $('#rail').getBoundingClientRect().width : 0))) + 'px'
   })
 })()
 
@@ -674,7 +810,7 @@ C('view.focus', 'Toggle Focus Mode', () => app.settings.set('focusMode', !app.se
 C('view.typewriter', 'Toggle Typewriter Mode', () => app.settings.set('typewriter', !app.settings.get('typewriter')), 'F9', 'View')
 C('view.zoomIn', 'Increase Font Size', () => app.settings.set('fontSize', Math.min(32, app.settings.get('fontSize') + 1)), 'Ctrl+=|Ctrl++', 'View')
 C('view.zoomOut', 'Decrease Font Size', () => app.settings.set('fontSize', Math.max(11, app.settings.get('fontSize') - 1)), 'Ctrl+-', 'View')
-C('view.zoomReset', 'Reset Font Size', () => app.settings.set('fontSize', 17), 'Ctrl+0', 'View')
+C('view.zoomReset', 'Reset Font Size', () => app.settings.set('fontSize', Math.round((17 * (Number(app.settings.get('defaultZoom')) || 100)) / 100)), 'Ctrl+0', 'View')
 C('view.autosave', 'Toggle Autosave', () => {
   app.settings.set('autosave', !app.settings.get('autosave'))
   app.toast('Autosave ' + (app.settings.get('autosave') ? 'on' : 'off'))
@@ -718,10 +854,8 @@ window.addEventListener('drop', async (e) => {
   const files = [...(e.dataTransfer?.files || [])]
   if (!files.length) return
   e.preventDefault()
-  for (const f of files) {
-    const p = api.pathForFile ? api.pathForFile(f) : f.path
-    if (p) await openPath(p)
-  }
+  // the one renderer-initiated grant: File objects only, the preload turns them into paths
+  for (const p of (await api.grantDropped(files)) || []) await openPath(p)
 })
 window.addEventListener('beforeunload', () => {
   syncActive()
@@ -766,6 +900,9 @@ async function boot() {
       import('./modules/search.js'),
       import('./modules/updates.js'),
       import('./modules/texttools.js'),
+      import('./modules/contextmenu.js'),
+      import('./modules/defaultapp.js'),
+      import('./modules/logview.js'),
     ])
     for (const m of mods) {
       try {
