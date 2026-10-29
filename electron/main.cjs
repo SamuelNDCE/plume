@@ -282,6 +282,8 @@ ipcMain.on('folder:search-start', (e, id, dir, query, opts) => {
     let firstAt = null
     worker.on('message', (m) => {
       if (searchRun !== run) return
+      // Hits must pass the same rule as file access: nothing inside the app's data folder or a sensitive dotfile folder.
+      if (m.hits) m.hits = m.hits.filter((h) => grants.isGranted(h.path, { folder: true }))
       if (m.hits && m.hits.length && firstAt === null) firstAt = Number(process.hrtime.bigint() - t0) / 1e6
       send(m)
       if (m.done) {
@@ -305,14 +307,8 @@ ipcMain.handle('file:write', (_e, p, content, fmt = {}) => {
 ipcMain.handle('file:write-bytes', (_e, p, bytes) => {
   need(p)
   if (!(bytes instanceof Uint8Array) || !bytes.length) throw new Error('nothing to write')
-  const tmp = p + '.plume-tmp'
-  try {
-    fs.writeFileSync(tmp, bytes)
-    fs.renameSync(tmp, p)
-  } catch (e) {
-    try { fs.unlinkSync(tmp) } catch {}
-    throw e
-  }
+  // Same atomic path as text saves: a random temp name opened exclusively, then renamed over the target.
+  writeAtomic(p, Buffer.from(bytes))
   return true
 })
 ipcMain.handle('file:save-dialog', async (_e, suggested) => {
