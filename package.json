@@ -1,7 +1,7 @@
 {
   "name": "plume",
   "version": "0.5.1",
-  "description": "Plume, the free, open-source universal file editor: Markdown, text, logs, CSV, Excel, Word and PDF.",
+  "description": "Plume",
   "license": "MIT",
   "main": "electron/main.cjs",
   "type": "module",

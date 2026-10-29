@@ -18,7 +18,7 @@
 
 <br>
 
-<img src="docs/screenshots/plume-light.webp" alt="Plume editing a Markdown document" width="900">
+<img src="docs/screenshots/plume-editor.webp" alt="Plume editing a Markdown document" width="900">
 
 </div>
 
@@ -53,29 +53,29 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 ## See it
 
 <div align="center">
-<img src="docs/screenshots/plume-outline.webp" alt="The outline rail along the left edge of the document" width="880">
-<br><sub>The outline rail: one line per heading down the left edge. Click a line to jump there; hover to see the names.</sub>
-<br><br>
-<img src="docs/screenshots/plume-dark-charts.webp" alt="Dark theme with a Mermaid diagram and a chart" width="880">
-<br><sub>Diagrams and charts render inline and follow the theme. Shown: Midnight.</sub>
-<br><br>
-<img src="docs/screenshots/plume-eight-themes.webp" alt="All eight built-in themes" width="880">
-<br><sub>Eight very different built-in themes: Light, GitHub, Newsprint and Sepia, then Dark, Nord, Dracula and Midnight.</sub>
+<img src="docs/screenshots/plume-editor.webp" alt="Rich Markdown editing" width="880">
+<br><sub>Rich Markdown: headings, lists, tables, code and links, edited as you read them.</sub>
 <br><br>
 <img src="docs/screenshots/plume-source.webp" alt="Source view with syntax highlighting" width="880">
 <br><sub>One keystroke (<code>Ctrl+/</code>) flips between rich view and highlighted source.</sub>
 <br><br>
-<img src="docs/screenshots/plume-slash-menu.webp" alt="The slash menu for inserting blocks" width="880">
-<br><sub>Type <code>/</code> to add headings, tables, code, math, images and diagrams without leaving the keyboard.</sub>
+<img src="docs/screenshots/plume-themes.webp" alt="Light, Sepia, Dark and Midnight themes side by side" width="880">
+<br><sub>Themes change the whole look. Shown: Light, Sepia, Dark and Midnight (eight are built in).</sub>
 <br><br>
-<img src="docs/screenshots/plume-themes-settings.webp" alt="Settings with the theme gallery" width="880">
+<img src="docs/screenshots/plume-menus.webp" alt="The File menu, and the selection bar with the right-click menu" width="880">
+<br><sub>The File menu, and the selection bar with the right-click menu over selected text.</sub>
+<br><br>
+<img src="docs/screenshots/plume-spreadsheet.webp" alt="CSV opened in the spreadsheet grid" width="880">
+<br><sub>CSV and TSV open in a spreadsheet grid with formulas, sorting and filters.</sub>
+<br><br>
+<img src="docs/screenshots/plume-pdf.webp" alt="A multi-page PDF with the page list" width="880">
+<br><sub>PDF viewer with the page list down the left.</sub>
+<br><br>
+<img src="docs/screenshots/plume-logs.webp" alt="Log view with level chips and a stack trace" width="880">
+<br><sub>Log view: level counts, filtering and collapsible stack traces.</sub>
+<br><br>
+<img src="docs/screenshots/plume-settings.webp" alt="Settings with the theme gallery" width="880">
 <br><sub>Pick a theme, change fonts, sizes, widths and chart style, or write your own CSS.</sub>
-<br><br>
-<img src="docs/screenshots/plume-csv-viewer.webp" alt="CSV opened in the spreadsheet grid" width="880">
-<br><sub>Not only Markdown: CSV and TSV open in a spreadsheet grid with formulas, sorting, filters and live selection stats.</sub>
-<br><br>
-<img src="docs/screenshots/plume-command-palette.webp" alt="The command palette" width="880">
-<br><sub>Everything is a command. <code>Ctrl+P</code> finds it.</sub>
 </div>
 
 ## Features
