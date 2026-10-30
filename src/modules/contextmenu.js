@@ -73,6 +73,7 @@ const P = {
   up: 'M12 19V5M6 11l6-6 6 6',
   down: 'M12 5v14M6 13l6 6 6-6',
   replace: 'M4 7h12l-3-3M20 17H8l3 3',
+  chevron: 'm6 9 6 6 6-6',
 }
 const iconSvg = (name) =>
   `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"${name === 'selectall' ? ' stroke-dasharray="3 3"' : ''}><path d="${P[name]}"/></svg>`
@@ -326,7 +327,7 @@ export function init(app) {
 
   // What the bar highlights: the block style of the line, and which inline marks the selection carries.
   function barState() {
-    const st = { block: null, quote: false, bullets: false, numbers: false, task: false, bold: false, italic: false, underline: false, strike: false, code: false }
+    const st = { block: null, codeblock: false, quote: false, bullets: false, numbers: false, task: false, bold: false, italic: false, underline: false, strike: false, code: false }
     if (rich()) {
       const s = document.getSelection()
       const p = pm()
@@ -337,6 +338,7 @@ export function init(app) {
       if (h && p.contains(h)) st.block = Number(h.tagName[1])
       else if (n.closest('p') || n.closest('li')) st.block = 0
       st.quote = !!n.closest('blockquote')
+      st.codeblock = !!n.closest('pre')
       const li = n.closest('li')
       st.task = !!(li && li.dataset.itemType === 'task')
       st.bullets = !!(li && !st.task && li.parentElement && li.parentElement.tagName === 'UL')
@@ -555,27 +557,33 @@ export function init(app) {
 
   /* ---------- the bar: icon row + collapsible menu body ---------- */
   const QUICK = [
-    { badge: 'P', label: 'Paragraph', kbd: 'Ctrl+Alt+0', action: 'body', st: 'block0' },
-    { badge: 'H1', label: 'Title (H1)', kbd: 'Ctrl+Alt+1', action: 'title', st: 'block1' },
-    { badge: 'H2', label: 'Heading 2', kbd: 'Ctrl+Alt+2', action: 'h2', st: 'block2' },
-    { badge: 'H3', label: 'Heading 3', kbd: 'Ctrl+Alt+3', action: 'h3', st: 'block3' },
-    { sep: true },
+    { block: true },
     { icon: 'bold', label: 'Bold', kbd: 'Ctrl+B', action: 'bold', st: 'bold' },
     { icon: 'italic', label: 'Italic', kbd: 'Ctrl+I', action: 'italic', st: 'italic' },
     { icon: 'underline', label: 'Underline', action: 'underline', st: 'underline' },
     { icon: 'strike', label: 'Strikethrough', kbd: 'Ctrl+Alt+X', action: 'strike', st: 'strike' },
     { icon: 'code', label: 'Code', kbd: 'Ctrl+E', action: 'code', st: 'code' },
     { sep: true },
-    { icon: 'link', label: 'Link', action: 'link', custom: 'link' },
-    { icon: 'quote', label: 'Quote', kbd: 'Ctrl+Shift+B', action: 'quote', st: 'quote' },
-    { icon: 'bullets', label: 'Bullet list', kbd: 'Ctrl+Alt+8', action: 'bullets', st: 'bullets' },
-    { icon: 'numbers', label: 'Numbered list', kbd: 'Ctrl+Alt+7', action: 'numbers', st: 'numbers' },
-    { icon: 'task', label: 'Task list', action: 'task', st: 'task' },
-    { sep: true },
-    { icon: 'smaller', label: 'Smaller text', kbd: 'Ctrl+-', action: 'smaller', keep: true },
-    { icon: 'larger', label: 'Larger text', kbd: 'Ctrl++', action: 'larger', keep: true },
-    { select: true },
+    { size: true },
   ]
+  const BLOCKS = [
+    { label: 'Paragraph', action: 'body', key: 0, kbd: 'Ctrl+Alt+0' },
+    { label: 'Title', action: 'title', key: 1, kbd: 'Ctrl+Alt+1' },
+    { label: 'Heading 2', action: 'h2', key: 2, kbd: 'Ctrl+Alt+2' },
+    { label: 'Heading 3', action: 'h3', key: 3, kbd: 'Ctrl+Alt+3' },
+  ]
+  // The block name shown on the trigger: the standard styles by number, anything else by what the line is.
+  function blockName(st) {
+    if (st.codeblock) return 'Code block'
+    if (st.task) return 'Task list'
+    if (st.bullets) return 'Bullet list'
+    if (st.numbers) return 'Numbered list'
+    if (st.quote) return 'Quote'
+    if (!st.block) return 'Paragraph'
+    if (st.block === 1) return 'Title'
+    return 'Heading ' + st.block
+  }
+  const isStd = (st) => !st.codeblock && !st.task && !st.bullets && !st.numbers && !st.quote && (st.block || 0) <= 3
   const bar = el('div', 'qbar')
   bar.id = 'qbar'
   bar.hidden = true
@@ -593,31 +601,148 @@ export function init(app) {
   bar.append(row, body)
   document.body.appendChild(bar)
 
+  /* ---------- compact drop-down: one family for the block style and the size ---------- */
+  let dd = null // the open drop-down: { trigger, panel }
+  function closeDd(refocus = false) {
+    if (!dd) return
+    const t = dd.trigger
+    dd.panel.remove()
+    t.setAttribute('aria-expanded', 'false')
+    t.classList.remove('open')
+    dd = null
+    if (refocus) t.focus()
+  }
+  function makeDropdown(cls, name, tip, fill, onPick) {
+    const t = el('button', 'qb-dd ' + cls)
+    t.type = 'button'
+    t.tabIndex = -1
+    t.title = tip
+    t.setAttribute('aria-label', name)
+    t.setAttribute('aria-haspopup', 'listbox')
+    t.setAttribute('aria-expanded', 'false')
+    const lab = el('span', 'qb-dd-label')
+    const chev = icon('chevron')
+    chev.classList.add('qb-dd-chev')
+    t.append(lab, chev)
+    t.addEventListener('mousedown', (e) => e.preventDefault())
+    const open = (viaKey) => {
+      if (dd && dd.trigger === t) return closeDd()
+      closeDd()
+      closeSubs()
+      const panel = el('div', 'ctx-menu ctx-dd')
+      panel.setAttribute('role', 'listbox')
+      panel.setAttribute('aria-label', name)
+      const rows = []
+      const setRow = (b, focus = true) => {
+        for (const r of rows) r.classList.toggle('active', r === b)
+        if (focus) b.focus()
+      }
+      for (const it of fill()) {
+        const b = el('button', 'ctx-item ctx-dd-item' + (it.on ? ' ctx-on' : ''))
+        b.type = 'button'
+        b.tabIndex = -1
+        b.setAttribute('role', 'option')
+        b.setAttribute('aria-selected', it.on ? 'true' : 'false')
+        const ck = icon('check')
+        ck.classList.add('ctx-dd-check')
+        if (!it.on) ck.classList.add('ctx-dd-off')
+        b.append(ck, el('span', 'ctx-label', it.label))
+        if (it.kbd) b.appendChild(el('kbd', null, it.kbd))
+        b.addEventListener('mousedown', (e) => e.preventDefault())
+        b.addEventListener('mouseenter', () => setRow(b, false))
+        b.addEventListener('click', () => {
+          closeDd()
+          onPick(it)
+        })
+        panel.appendChild(b)
+        rows.push(b)
+      }
+      root.appendChild(panel)
+      t.setAttribute('aria-expanded', 'true')
+      t.classList.add('open')
+      const tr = t.getBoundingClientRect()
+      const pr = panel.getBoundingClientRect()
+      const below = tr.bottom + 4 + pr.height <= window.innerHeight - 8
+      panel.style.left = Math.max(8, Math.min(tr.left, window.innerWidth - pr.width - 8)) + 'px'
+      panel.style.top = Math.max(8, below ? tr.bottom + 4 : tr.top - 4 - pr.height) + 'px'
+      panel.style.transformOrigin = below ? 'top left' : 'bottom left'
+      const cur = rows.find((r) => r.classList.contains('ctx-on')) || rows[0]
+      panel.addEventListener('keydown', (e) => {
+        const at = rows.indexOf(document.activeElement)
+        const go = (i) => setRow(rows[(i + rows.length) % rows.length])
+        if (e.key === 'ArrowDown') go(at + 1)
+        else if (e.key === 'ArrowUp') go(at < 0 ? rows.length - 1 : at - 1)
+        else if (e.key === 'Home') go(0)
+        else if (e.key === 'End') go(rows.length - 1)
+        else if (e.key === 'Enter' || e.key === ' ') rows[at] && rows[at].click()
+        else if (e.key === 'Escape' || e.key === 'Tab') closeDd(true)
+        else return
+        e.preventDefault()
+        e.stopPropagation()
+      })
+      dd = { trigger: t, panel }
+      setRow(cur, viaKey !== false)
+    }
+    t.addEventListener('click', (e) => open(e.detail === 0))
+    t.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && dd && dd.trigger === t) {
+        e.preventDefault()
+        e.stopPropagation()
+        closeDd(true)
+      } else if (e.key === 'ArrowDown' && !(dd && dd.trigger === t)) {
+        e.preventDefault()
+        e.stopPropagation()
+        open(true)
+      }
+    })
+    return { t, lab }
+  }
+
   const barBtns = []
+  let blockDd = null
+  let sizeDd = null
+  const afterPick = () => {
+    if (expanded) hideAll()
+    else setTimeout(updateBar, 30)
+  }
   for (const q of QUICK) {
     if (q.sep) {
       row.appendChild(el('span', 'qb-sep'))
       continue
     }
-    if (q.select) {
-      const sel = el('select', 'qb-select')
-      sel.tabIndex = -1
-      sel.dataset.action = 'sizeset'
-      sel.title = 'Text size in px'
-      sel.setAttribute('aria-label', 'Text size')
-      for (const [, px] of PRESETS) {
-        const o = el('option', null, String(px))
-        o.value = String(px)
-        sel.appendChild(o)
-      }
-      sel.addEventListener('change', () => {
-        setSize(Number(sel.value))
+    if (q.block) {
+      blockDd = makeDropdown('qb-block', 'Block style', 'Block style', () => {
+        const st = barState()
+        const rows = BLOCKS.map((b) => ({ ...b, on: isStd(st) && (st.block || 0) === b.key }))
+        if (!isStd(st)) rows.push({ label: blockName(st), action: null, on: true })
+        return rows
+      }, (it) => {
+        focusEditor()
+        if (!it.action) return
+        run(it.action)
+        afterPick()
+      })
+      blockDd.t.dataset.action = 'block'
+      barBtns.push(blockDd.t)
+      row.appendChild(blockDd.t)
+      continue
+    }
+    if (q.size) {
+      sizeDd = makeDropdown('qb-size', 'Text size', 'Text size in px', () => {
+        const size = app.settings.get('fontSize')
+        const rows = PRESETS.map(([, px]) => ({ label: String(px), px, on: px === size }))
+        if (!rows.some((r) => r.on)) rows.push({ label: String(size), px: size, on: true })
+        return rows
+      }, (it) => {
+        focusEditor()
+        setSize(it.px)
         syncSizeButtons()
         refreshSizePanel()
-        focusEditor()
+        if (expanded) hideAll()
       })
-      barBtns.push(sel)
-      row.appendChild(sel)
+      sizeDd.t.dataset.action = 'sizeset'
+      barBtns.push(sizeDd.t)
+      row.appendChild(sizeDd.t)
       continue
     }
     const b = el('button', 'qb-btn')
@@ -627,27 +752,15 @@ export function init(app) {
     if (q.st) b.dataset.st = q.st
     b.title = q.kbd ? `${q.label} (${q.kbd})` : q.label
     b.setAttribute('aria-label', q.label)
-    if (q.badge) {
-      const t = el('span', 'qb-badge', q.badge)
-      t.setAttribute('aria-hidden', 'true')
-      b.appendChild(t)
-    } else b.appendChild(icon(q.icon))
+    b.appendChild(icon(q.icon))
     if (q.st) b.setAttribute('aria-pressed', 'false')
     b.addEventListener('mousedown', (e) => e.preventDefault()) // keep the editor selection
     b.addEventListener('click', () => {
-      if (q.custom === 'link') {
-        closeSubs()
-        if (expanded) hideAll()
-        return openLink(b)
-      }
+      closeDd()
       const wasExpanded = expanded
-      if (wasExpanded && !q.keep) hideAll()
+      if (wasExpanded) hideAll()
       run(q.action)
       if (!wasExpanded) setTimeout(updateBar, 30)
-      else if (q.keep) {
-        syncSizeButtons()
-        refreshSizePanel()
-      }
     })
     b.addEventListener('mouseenter', () => expanded && closeSubsSoon())
     barBtns.push(b)
@@ -655,30 +768,17 @@ export function init(app) {
   }
 
   function syncSizeButtons() {
-    const size = app.settings.get('fontSize')
-    for (const b of barBtns) {
-      if (b.dataset.action === 'smaller') b.disabled = size <= SIZE_MIN
-      if (b.dataset.action === 'larger') b.disabled = size >= SIZE_MAX
-      if (b.dataset.action === 'sizeset') {
-        for (const o of [...b.options]) if (o.dataset.custom) o.remove()
-        if (![...b.options].some((o) => Number(o.value) === size)) {
-          const o = el('option', null, String(size))
-          o.value = String(size)
-          o.dataset.custom = '1'
-          b.appendChild(o)
-        }
-        b.value = String(size)
-      }
-    }
+    if (sizeDd) sizeDd.lab.textContent = String(app.settings.get('fontSize'))
   }
 
   // Highlight the block style, inline marks and list type that apply to the selection.
   function syncState() {
     const st = barState()
+    if (blockDd) blockDd.lab.textContent = blockName(st)
     for (const b of barBtns) {
       const key = b.dataset.st
       if (!key) continue
-      const on = key.startsWith('block') ? st.block === Number(key.slice(5)) : !!st[key]
+      const on = !!st[key]
       b.classList.toggle('on', on)
       b.setAttribute('aria-pressed', on ? 'true' : 'false')
     }
@@ -714,6 +814,7 @@ export function init(app) {
 
   function hideBar() {
     if (expanded) return
+    closeDd()
     closeSubs()
     bar.hidden = true
     bar.classList.remove('open')
@@ -799,6 +900,11 @@ export function init(app) {
       { label: 'Heading 4', badge: 'H4', action: 'h4' },
       { label: 'Heading 5', badge: 'H5', action: 'h5' },
       { label: 'Heading 6', badge: 'H6', action: 'h6' },
+      { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
+      { label: 'Quote', icon: 'quote', action: 'quote' },
+      { label: 'Bullet list', icon: 'bullets', action: 'bullets' },
+      { label: 'Numbered list', icon: 'numbers', action: 'numbers' },
+      { label: 'Task list', icon: 'task', action: 'task' },
       { label: 'Table', icon: 'table', action: 'table' },
       { label: 'Code block', icon: 'codeblock', action: 'codeblock' },
     ]
@@ -827,7 +933,7 @@ export function init(app) {
 
   function menuModel(level = 0) {
     const src = !rich()
-    // Block style, inline marks, link, quote, lists and size live in the quick bar, so none of them is repeated here.
+    // Block style, inline marks and size live in the quick bar. Link, quote and the lists live here, under Insert.
     const blocks = [
       { label: 'Heading 4', badge: 'H4', kbd: 'Ctrl+Alt+4', action: 'h4', sample: { scale: 1, weight: 650 } },
       { label: 'Heading 5', badge: 'H5', kbd: 'Ctrl+Alt+5', action: 'h5', sample: { scale: 0.95, weight: 650 } },
@@ -836,6 +942,12 @@ export function init(app) {
       { label: 'Code block', icon: 'codeblock', kbd: 'Ctrl+Alt+C', action: 'codeblock' },
     ]
     const insert = [
+      { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
+      { label: 'Quote', icon: 'quote', kbd: 'Ctrl+Shift+B', action: 'quote' },
+      { label: 'Bullet list', icon: 'bullets', kbd: 'Ctrl+Alt+8', action: 'bullets' },
+      { label: 'Numbered list', icon: 'numbers', kbd: 'Ctrl+Alt+7', action: 'numbers' },
+      { label: 'Task list', icon: 'task', action: 'task' },
+      { sep: true },
       { label: 'Table', icon: 'table', action: 'table' },
       { label: 'Date and time', icon: 'calendar', kbd: 'Ctrl+Shift+D', action: 'datetime' },
       { label: 'Divider', icon: 'divider', action: 'divider' },
@@ -1208,6 +1320,7 @@ export function init(app) {
 
   function hideAll() {
     clearTimeout(timer)
+    closeDd()
     closeSubs()
     const was = expanded
     expanded = false
@@ -1244,6 +1357,7 @@ export function init(app) {
 
   document.addEventListener('keydown', (e) => {
     const k = e.key
+    if (dd && dd.panel.contains(document.activeElement)) return // the open drop-down handles its own keys
     if (bar.hidden) return
     // collapsed bar: Escape dismisses it for this selection
     if (!expanded && k === 'Escape') {
