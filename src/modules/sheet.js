@@ -7,6 +7,7 @@ import {
   Sheet, colToLetters, parseRange, addr, displayValue, isErr, computeStats,
   detectHeader, formatDisplay, parseCsv, serializeCsv, shiftFormula,
 } from './sheet-core.js'
+import { wrapCommand } from './shortcuts.js'
 
 const ROW_H = 24
 const HEAD_H = 24
@@ -1662,19 +1663,8 @@ export async function mount(host, opts, ctx) {
     fi.focus({ preventScroll: true })
     fi.select()
   }
-  // The app's own Ctrl+H (text find and replace) runs from a window-level handler, so the grid takes the key first, in the capture phase.
-  on(
-    window,
-    'keydown',
-    (e) => {
-      if (destroyed || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || String(e.key).toLowerCase() !== 'h') return
-      if (document.activeElement !== grid) return
-      e.preventDefault()
-      e.stopPropagation()
-      openFindReplace()
-    },
-    true,
-  )
+  // The app's Ctrl+H command (text find and replace) runs first from a window-level handler, so take the command over while the grid has focus.
+  offs.push(wrapCommand(window.__plume, 'find.replace', () => !destroyed && document.activeElement === grid, () => openFindReplace()))
   on(
     document,
     'mousedown',
