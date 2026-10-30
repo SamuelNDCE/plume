@@ -2,6 +2,20 @@
 
 All notable changes to Plume are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Nothing yet.
+
+## [0.5.4] - Unreleased
+
+### Fixed
+
+- Selection bar and scrolling in the rich view: a drag selection no longer leaves the editor scroller locked; the title and size bar shows after selecting.
+- The status bar shows the file size of unsaved documents; the line-ending chip and the read timer were removed.
+- Menu: Save and Save As at the top, Go to line and Search in folder at the top level, the Custom group removed.
+- Drop-downs line up with the selection bar and fade out instead of vanishing.
+- Rich and source views slide when switched.
+
 ## [0.5.3] - 2026-10-30
 
 ### Added

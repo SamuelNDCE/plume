@@ -13,6 +13,7 @@
 // Other views (sheet, viewer, empty) keep their own behaviour and get neither.
 
 import { countText } from './statusbar.js'
+import { leave } from './leave.js'
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag)
@@ -612,7 +613,7 @@ export function init(app) {
   function closeDd(refocus = false) {
     if (!dd) return
     const t = dd.trigger
-    dd.panel.remove()
+    leave(dd.panel)
     t.setAttribute('aria-expanded', 'false')
     t.classList.remove('open')
     dd = null
@@ -666,11 +667,17 @@ export function init(app) {
       root.appendChild(panel)
       t.setAttribute('aria-expanded', 'true')
       t.classList.add('open')
+      // Block style lines up with the bar's left edge. Text size is as wide as its button (never narrower than 64 px) and lines up with the button's right edge.
+      const br = bar.getBoundingClientRect()
       const tr = t.getBoundingClientRect()
-      const pr = panel.getBoundingClientRect()
-      const below = tr.bottom + 4 + pr.height <= window.innerHeight - 8
-      panel.style.left = Math.max(8, Math.min(tr.left, window.innerWidth - pr.width - 8)) + 'px'
-      panel.style.top = Math.max(8, below ? tr.bottom + 4 : tr.top - 4 - pr.height) + 'px'
+      if (cls === 'qb-size') panel.style.minWidth = Math.max(64, Math.round(tr.width)) + 'px'
+      // offsetWidth, not getBoundingClientRect: the open animation scales the panel and would shift its measured edge.
+      const pw = panel.offsetWidth
+      const ph = panel.offsetHeight
+      const below = br.bottom + 4 + ph <= window.innerHeight - 8
+      const x = cls === 'qb-size' ? tr.right - pw : br.left
+      panel.style.left = Math.max(8, Math.min(x, window.innerWidth - pw - 8)) + 'px'
+      panel.style.top = Math.max(8, below ? br.bottom + 4 : br.top - 4 - ph) + 'px'
       panel.style.transformOrigin = below ? 'top left' : 'bottom left'
       const cur = rows.find((r) => r.classList.contains('ctx-on')) || rows[0]
       panel.addEventListener('keydown', (e) => {
@@ -1000,7 +1007,7 @@ export function init(app) {
   function closeSubs() {
     while (subs.length) {
       const s = subs.pop()
-      s.panel.remove()
+      leave(s.panel)
       s.parentBtn.setAttribute('aria-expanded', 'false')
     }
   }
@@ -1392,7 +1399,7 @@ export function init(app) {
       } else if (k === 'Escape') {
         e.preventDefault()
         const parent = topSub.parentBtn
-        topSub.panel.remove()
+        leave(topSub.panel)
         subs.pop()
         setActive(parent)
       }
@@ -1408,7 +1415,7 @@ export function init(app) {
         const parent = (subs.length > 1 && !topSub.buttons.length ? topSub : topSub).parentBtn
         const wasLink = !!topSub.link
         if (wasLink) {
-          topSub.panel.remove()
+          leave(topSub.panel)
           subs.pop()
         } else closeSubs()
         setActive(parent)

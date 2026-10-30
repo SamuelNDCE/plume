@@ -4,7 +4,7 @@
 // CJK ideographs, kana and hangul: each character counts as one word.
 const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
 
-import { EOL_LABEL, encName } from './texttools.js'
+import { encName } from './texttools.js'
 const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image' }
 
 // Plain text of a markdown document: fences, syntax and HTML removed, text kept.
@@ -72,7 +72,6 @@ export function init(app) {
   right.id = 'status-right'
   const wordsEl = el('span', 'sb-stat sb-words')
   const charsEl = el('span', 'sb-stat sb-chars')
-  const readEl = el('span', 'sb-stat sb-read')
   const cursorEl = el('span', 'sb-stat sb-lines')
   const sizeEl = el('span', 'sb-stat sb-size')
   const modeBtn = el('button', 'sb-mode')
@@ -87,14 +86,13 @@ export function init(app) {
     b.addEventListener('click', () => app.textTools && app.textTools.pick(kind, b))
     return b
   }
-  const eolBtn = chip('sb-eol', 'Line endings used when saving. Click to change.', 'eol')
   const encBtn = chip('sb-enc', 'Encoding used when saving. Click to change.', 'enc')
   const zoomBtn = el('button', 'sb-mode sb-chip sb-zoom')
   zoomBtn.type = 'button'
   zoomBtn.title = 'Zoom. Click to reset (Ctrl+0). Ctrl+scroll to zoom.'
   zoomBtn.addEventListener('click', () => app.commands.run('view.zoomReset'))
 
-  right.append(wordsEl, charsEl, readEl, sizeEl, cursorEl, zoomBtn, eolBtn, encBtn, modeBtn)
+  right.append(wordsEl, charsEl, sizeEl, cursorEl, zoomBtn, encBtn, modeBtn)
   bar.append(left, right)
 
   /* ---------- state ---------- */
@@ -128,22 +126,22 @@ export function init(app) {
   function renderStats() {
     const cur = app.state.tabs[app.state.active]
     // file size shows for every file that has one
-    sizeEl.textContent = cur && cur.size != null ? formatSize(cur.size) : ''
+    // a document that has not been saved yet has no size on disk: show the bytes it would be written as
+    const bytes = cur && cur.size != null ? cur.size : cur && typeof cur.content === 'string' ? new TextEncoder().encode(cur.content).length : null
+    sizeEl.textContent = bytes != null ? formatSize(bytes) : ''
     sizeEl.hidden = !sizeEl.textContent
     // spreadsheets, images and PDF/Word/Excel viewers have no prose: word counts would be noise (the grid has its own stats).
     // Logs are text and keep their counts, even though they open in the table view.
     const noProse = app.state.mode === 'image' || app.state.mode === 'viewer' || (app.state.mode === 'table' && !(cur && cur.log))
     if (noProse) {
-      wordsEl.hidden = charsEl.hidden = readEl.hidden = cursorEl.hidden = true
+      wordsEl.hidden = charsEl.hidden = cursorEl.hidden = true
       return
     }
     wordsEl.hidden = false
     const selecting = selWords > 0
     wordsEl.textContent = selecting ? `${selWords} selected ${selWords === 1 ? 'word' : 'words'}` : `${stats.words} words`
     charsEl.hidden = selecting
-    readEl.hidden = selecting
     charsEl.textContent = `${stats.chars} characters`
-    readEl.textContent = stats.words ? `${Math.max(1, Math.ceil(stats.words / 200))} min read` : '0 min read'
     const inSource = app.state.mode === 'source' && !!app.code
     cursorEl.hidden = !inSource
     if (inSource) {
@@ -153,11 +151,9 @@ export function init(app) {
     // file format chips: only for files that are written back as text
     const t = app.state.tabs[app.state.active]
     const isText = !!t && (t.kind === 'md' || t.kind === 'text') && (app.state.mode === 'source' || app.state.mode === 'wysiwyg')
-    eolBtn.hidden = encBtn.hidden = zoomBtn.hidden = !isText
+    encBtn.hidden = zoomBtn.hidden = !isText
     if (isText) {
-      eolBtn.textContent = EOL_LABEL[t.eol] || 'LF'
       encBtn.textContent = encName(t.encoding || 'utf-8')
-      eolBtn.title = (t.mixedEol ? 'This file mixed line endings; they are unified when saved. ' : '') + 'Line endings used when saving. Click to change.'
       zoomBtn.textContent = Math.round((app.settings.get('fontSize') / 17) * 100) + '%'
     }
   }

@@ -39,9 +39,13 @@ The same document as highlighted source. Press **`Ctrl+/`** to flip between the 
 
 Four of the eight built-in themes: Light, Sepia, Dark and Midnight.
 
-![The File menu beside the selection bar and its drop-down](docs/screenshots/plume-menus.webp)
+![The File menu with its File submenu open](docs/screenshots/plume-menus.webp)
 
-The File menu, and the selection bar that appears over selected text, with one of its drop-downs open.
+The menu button at the top left. Save and Save As are at the top, and Go to line and Search in folder sit beside Find and Replace.
+
+![The selection bar with its block style drop-down open](docs/screenshots/plume-selection.webp)
+
+Select text and the selection bar appears just below it. Its block style drop-down is open here.
 
 ![CSV opened in the spreadsheet grid with find open](docs/screenshots/plume-spreadsheet.webp)
 
@@ -135,24 +139,20 @@ The Settings page. Press **`Ctrl+,`** to open it.
 
 The full list is in Settings, under Shortcuts.
 
-## Speed and size, against Notepad
+## Plume compared with Notepad
 
-Measured on the same PC, with the same files, against the Notepad that comes with Windows. Full numbers and the method are in [STATISTICS.md](docs/STATISTICS.md).
+Notepad is the small, fast text editor that comes with Windows, and it is the right tool for a quick plain-text note. Plume does more, in one window:
 
-| | Plume | Notepad |
-| --- | ---: | ---: |
-| Memory with a 50 MB log open | 1,866 MB | 261 MB |
-| Window ready, startup | 925 ms | 306 ms |
-| Installed size | 679 MB | 0.35 MB (program file, part of Windows) |
+- Markdown rendered as you write, with a source view one shortcut away (`Ctrl+/`).
+- CSV and Excel files in a spreadsheet grid, with formulas. Excel cells can be edited and saved back to `.xlsx`.
+- PDF files with a page list, highlights, notes, page edits and form fields.
+- Word `.docx` files, read only.
+- Log files with level counts, filters and collapsible stack traces.
+- Folder search, a left bar with open files and recent files, and eight themes.
+- No account and no telemetry. The only network request is the optional update check, which you can turn off.
 
-Notepad is faster to open and much smaller. Plume is larger because it renders Markdown, spreadsheets, PDFs and logs in one window. Plume's idle CPU is about a third of Notepad's when both are idle.
+Notepad opens faster and takes far less disk space and memory. Plume is for the files Notepad does not render.
 
-<p align="center">
-  <img src="docs/benchmarks/readme-memory-50mb.svg" alt="Memory with a 50 MB log open: Plume 1866 MB, Notepad 261 MB" width="46%">
-  <img src="docs/benchmarks/readme-ready-startup.svg" alt="Window ready at startup: Plume 925 ms, Notepad 306 ms" width="46%">
-</p>
-
-**Does Plume spy on you?** No, and that is the joke. Plume has no Copilot, no telemetry and no network calls except the optional update check, which you can turn off in Settings.
 
 ## Install
 
