@@ -759,6 +759,14 @@ body.sidebar-peek .rail-btn::after, .rail-btn[aria-expanded="true"]::after { opa
 .lib-btn:hover { background: var(--hover); }
 .lib-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .lib-btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
+/* open and close: the bar slides and fades over 200 ms while the main area resizes (body.sidebar-ready is set after first paint so startup does not animate) */
+body.sidebar-ready #sidebar { transition: width 200ms ease, min-width 200ms ease, opacity 200ms ease, border-right-width 200ms ease, visibility 0s linear 0s; }
+body.sidebar-ready #sidebar > * { transition: transform 200ms ease; }
+body.no-sidebar:not(.sidebar-peek) #sidebar { display: flex; width: 0 !important; min-width: 0 !important; opacity: 0; border-right-width: 0; overflow: hidden; pointer-events: none; visibility: hidden; }
+body.sidebar-ready.no-sidebar:not(.sidebar-peek) #sidebar { transition: width 200ms ease, min-width 200ms ease, opacity 200ms ease, border-right-width 200ms ease, visibility 0s linear 200ms; }
+body.no-sidebar:not(.sidebar-peek) #sidebar > * { transform: translateX(-24px); }
+body.sidebar-ready.sidebar-peek #sidebar { transition: none; }
+@media (prefers-reduced-motion: reduce) { body.sidebar-ready #sidebar, body.sidebar-ready.no-sidebar:not(.sidebar-peek) #sidebar, body.sidebar-ready #sidebar > * { transition: none; } }
 /* hover overlay: the collapsed left bar floats over the document beside the rail (class set by sidebar.js) */
 body.no-sidebar.sidebar-peek #sidebar { display: flex; position: fixed; left: var(--rail-w, 48px); top: 0; bottom: 0; z-index: 50; box-shadow: var(--shadow-lg); animation: peek-in 160ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes peek-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }

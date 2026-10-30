@@ -952,7 +952,7 @@ export function init(app) {
     if (enteredPdf || (!pdf && body.classList.contains('pages-off'))) body.classList.remove('pages-off')
     const pm = pagesMode()
     const shown = paneShown()
-    if ((pm !== lastPm || (shown && !lastShown)) && shown) animatePane()
+    if (pm !== lastPm && shown) animatePane() // opening and closing the bar is a width and opacity transition (modules.css)
     lastPm = pm
     lastShown = shown
     syncRail()
@@ -1049,6 +1049,7 @@ export function init(app) {
   }
   showPane(curTab())
   syncRail()
+  requestAnimationFrame(() => requestAnimationFrame(() => body.classList.add('sidebar-ready')))
   renderOpen()
   renderFolder()
   renderRecent()
