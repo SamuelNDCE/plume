@@ -29,6 +29,14 @@ export function wrapCommand(app, id, active, fn, allowInText = false) {
 }
 
 export const PDF_KEYS = [
+  ['Pages', [
+    ['Down / Right / PageDown', 'Next page (page list focused)'],
+    ['Up / Left / PageUp', 'Previous page (page list focused)'],
+    ['Home / End', 'First or last page'],
+    ['Type a number', 'Jump to that page'],
+    ['Ctrl+Shift+R', 'Rotate the page for viewing (not saved)'],
+    ['Ctrl+P', 'Print the PDF'],
+  ]],
   ['Find', [
     ['Ctrl+F', 'Find in the PDF'],
     ['Enter / F3', 'Next match'],

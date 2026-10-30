@@ -52,37 +52,43 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 
 ## See it
 
-<div align="center">
-<img src="docs/screenshots/plume-editor.webp" alt="Rich Markdown editing" width="880">
-<br><sub>Rich Markdown: headings, lists, tables, code and links, edited as you read them.</sub>
-<br><br>
-<img src="docs/screenshots/plume-source.webp" alt="Source view with syntax highlighting" width="880">
-<br><sub>One keystroke (<code>Ctrl+/</code>) flips between rich view and highlighted source.</sub>
-<br><br>
-<img src="docs/screenshots/plume-themes.webp" alt="Light, Sepia, Dark and Midnight themes side by side" width="880">
-<br><sub>Themes change the whole look. Shown: Light, Sepia, Dark and Midnight (eight are built in).</sub>
-<br><br>
-<img src="docs/screenshots/plume-menus.webp" alt="The File menu, and the selection bar with the right-click menu" width="880">
-<br><sub>The File menu, and the selection bar with the right-click menu over selected text.</sub>
-<br><br>
-<img src="docs/screenshots/plume-spreadsheet.webp" alt="CSV opened in the spreadsheet grid" width="880">
-<br><sub>CSV and TSV open in a spreadsheet grid with formulas, sorting and filters.</sub>
-<br><br>
-<img src="docs/screenshots/plume-pdf.webp" alt="A multi-page PDF with the page list" width="880">
-<br><sub>PDF viewer with the page list down the left.</sub>
-<br><br>
-<img src="docs/screenshots/plume-logs.webp" alt="Log view with level chips and a stack trace" width="880">
-<br><sub>Log view: level counts, filtering and collapsible stack traces.</sub>
-<br><br>
-<img src="docs/screenshots/plume-settings.webp" alt="Settings with the theme gallery" width="880">
-<br><sub>Pick a theme, change fonts, sizes, widths and chart style, or write your own CSS.</sub>
-</div>
+![Rich Markdown editing](docs/screenshots/plume-editor.webp)
+
+This is the rich editor, where headings, lists, tables, code and links look finished while you type. Open any Markdown file and you land here.
+
+![Source view with syntax highlighting](docs/screenshots/plume-source.webp)
+
+This is the same document as highlighted source. Press **`Ctrl+/`** to flip between the rich view and this one.
+
+![Light, Sepia, Dark and Midnight themes side by side](docs/screenshots/plume-themes.webp)
+
+Four of the eight built-in themes side by side: Light, Sepia, Dark and Midnight. A theme changes the whole look, not just the colours.
+
+![The File menu, and the selection bar with the right-click menu](docs/screenshots/plume-menus.webp)
+
+The File menu from the menu button at the top left, and the quick bar and right-click menu that appear over selected text.
+
+![CSV opened in the spreadsheet grid](docs/screenshots/plume-spreadsheet.webp)
+
+A CSV file opened in the spreadsheet grid, with a formula bar, sorting and column filters. Open any `.csv` or `.tsv` file to get it.
+
+![A multi-page PDF with the page list](docs/screenshots/plume-pdf.webp)
+
+A PDF open in the viewer, with the page list down the left. Open any `.pdf` file to see it.
+
+![Log view with level chips and a stack trace](docs/screenshots/plume-logs.webp)
+
+A log file with level counts across the top, filtering, and collapsible stack traces. Open a `.log` file to get this view.
+
+![Settings with the theme gallery](docs/screenshots/plume-settings.webp)
+
+The Settings page with the theme gallery, where you also change fonts, sizes, widths and chart style or add your own CSS. Press **`Ctrl+,`** to open it.
 
 ## Features
 
 **Writing in Markdown**
 - Rich WYSIWYG editing on ProseMirror, with a slash menu and a selection toolbar
-- Rich view and raw source view, switch with `Ctrl+/`; edits carry across both
+- Rich view and raw source view: press **`Ctrl+/`** to flip between them, and your edits carry across both
 - Tables, task lists, footnotes, fenced code with highlighting, KaTeX math
 - Mermaid diagrams (flowcharts, sequence, gantt and more), loaded only when a document uses one
 - Built-in `chart` blocks (bar, line, area, pie) from a few lines of JSON, styled by your theme
@@ -109,7 +115,7 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 **Working with files**
 - Open as many documents as you like; they sit in a library list, no tab bar
 - Folder tree, recent files, search across a whole folder, and the outline rail (below)
-- Folder search runs in a background worker thread, streams results as it finds them, can be cancelled, and stops at 200 hits
+- Search across a whole folder with **`Ctrl+Shift+F`**. It runs in a background worker thread, streams results as it finds them, can be cancelled, and stops at 200 hits
 - Recent files list, with an x on each entry to hide it
 - Right-click menu and a quick bar above selected text (bold, italic, strikethrough, code, text size, block style, link)
 - On Windows, a one-time bubble offers to open Plume's page in Windows Default apps
@@ -124,8 +130,8 @@ Updates are built in: when a new version is out, Plume tells you and you click o
 
 **Reading and writing aids**
 - Find and replace with case, whole word and regex, in rich and source views
-- Command palette with fuzzy search, go-to-file and heading jump
-- Focus mode, typewriter mode, reading mode, zen mode, presentation mode (split on `---`)
+- Command palette with fuzzy search, go-to-file and heading jump: press **`Ctrl+P`** to open it
+- Focus mode, typewriter mode, reading mode, zen mode, presentation mode (press **`F5`**; slides split on `---`)
 - Spellcheck, word count, reading time
 
 **Export**
