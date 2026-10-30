@@ -12,6 +12,8 @@ import * as statusbar from './modules/statusbar.js'
 import * as mermaidMod from './modules/mermaid.js'
 import * as header from './modules/header.js'
 import * as empty from './modules/empty.js'
+import { initDragReset } from './modules/dragreset.js'
+import { initDragScroll } from './modules/dragscroll.js'
 
 const app = createApp()
 window.__plume = app
@@ -56,6 +58,14 @@ const doc = () => app.state.tabs[app.state.active]
 /* ---------- views ---------- */
 // app.state.mode: 'wysiwyg' (rich Markdown) | 'source' (code editor) | 'table' | 'image' | 'empty'
 function show(view) {
+  // Switching between rich and source: the view that appears slides up a few pixels (CSS `view-in`). Movement only, no opacity, so it
+  // still shows while the window is not being drawn.
+  const incoming = view === 'source' ? cmHost : view === 'wysiwyg' ? scrollEl : null
+  if (incoming && app.state.mode !== view) {
+    incoming.classList.remove('view-in')
+    void incoming.offsetWidth
+    incoming.classList.add('view-in')
+  }
   scrollEl.hidden = view !== 'wysiwyg'
   cmHost.hidden = view !== 'source'
   viewerHost.hidden = view !== 'table' && view !== 'image' && view !== 'viewer'
@@ -874,6 +884,8 @@ window.addEventListener(
 )
 
 window.addEventListener('dragover', (e) => e.preventDefault())
+initDragReset()
+initDragScroll()
 window.addEventListener('drop', async (e) => {
   const files = [...(e.dataTransfer?.files || [])]
   if (!files.length) return
