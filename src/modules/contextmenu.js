@@ -300,7 +300,10 @@ export function init(app) {
       return void document.execCommand('insertText', false, inner)
     }
     const attr = (t) => t.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    const value = '<u>' + s.toString() + '</u>'
+    // The value is written as raw HTML into the document, so text with < or > could become live markup. Refuse those.
+    const picked = s.toString()
+    if (/[<>]/.test(picked)) return void app.toast("Underline can't include < or > characters")
+    const value = '<u>' + picked + '</u>'
     // A paste of the html node keeps it inline in the paragraph (execCommand insertHTML would split the paragraph).
     const dt = new DataTransfer()
     dt.setData('text/html', '<span data-type="html" data-value="' + attr(value) + '"></span>')

@@ -816,7 +816,11 @@ class PdfViewer {
         if (this.dead) return
         this.status.textContent = 'Preparing to print, page ' + (i + 1) + ' of ' + total + '...'
         const page = await this.pdf.getPage(i + 1)
-        const vp = page.getViewport({ scale: PRINT_SCALE, rotation: this.rotation(page, i) })
+        // Same pixel cap as the on-screen render: a crafted page size lowers the print scale instead of allocating a huge canvas.
+        const rot = this.rotation(page, i)
+        const base = page.getViewport({ scale: PRINT_SCALE, rotation: rot })
+        const k = Math.min(1, Math.sqrt(MAX_PIXELS / Math.max(1, base.width * base.height)))
+        const vp = k < 1 ? page.getViewport({ scale: PRINT_SCALE * k, rotation: rot }) : base
         const canvas = document.createElement('canvas')
         canvas.width = Math.max(1, Math.floor(vp.width))
         canvas.height = Math.max(1, Math.floor(vp.height))
