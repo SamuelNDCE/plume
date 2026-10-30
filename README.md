@@ -139,6 +139,21 @@ The Settings page. Press **`Ctrl+,`** to open it.
 
 The full list is in Settings, under Shortcuts.
 
+## Plume compared with Notepad
+
+Notepad is the small, fast text editor that comes with Windows, and it is the right tool for a quick plain-text note. Plume does more, in one window:
+
+- Markdown rendered as you write, with a source view one shortcut away (`Ctrl+/`).
+- CSV and Excel files in a spreadsheet grid, with formulas. Excel cells can be edited and saved back to `.xlsx`.
+- PDF files with a page list, highlights, notes, page edits and form fields.
+- Word `.docx` files, read only.
+- Log files with level counts, filters and collapsible stack traces.
+- Folder search, a left bar with open files and recent files, and eight themes.
+- No account and no telemetry. The only network request is the optional update check, which you can turn off.
+
+Notepad opens faster and takes far less disk space and memory. Plume is for the files Notepad does not render.
+
+
 ## Install
 
 Download a build from [Releases](https://github.com/SamuelNDCE/plume/releases/latest).

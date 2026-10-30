@@ -16,7 +16,7 @@ Nothing yet.
 - Drop-downs line up with the selection bar and fade out instead of vanishing.
 - Rich and source views slide when switched.
 
-## [0.5.3] - Unreleased
+## [0.5.3] - 2026-10-30
 
 ### Added
 
