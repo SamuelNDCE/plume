@@ -47,7 +47,6 @@ contextBridge.exposeInMainWorld('folio', {
   devtools: inv('app:devtools'),
   platform: process.platform,
   openDefaultApps: inv('app:open-default-apps'),
-  menuItems: inv('app:menu-items'),
   // Native paste into the focused field (takes no argument, so the renderer cannot pass data through it).
   paste: () => ipcRenderer.send('edit:paste'),
   onOpenPath: (cb) => ipcRenderer.on('open-path', (_e, p) => cb(p)),

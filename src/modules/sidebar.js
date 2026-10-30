@@ -6,6 +6,7 @@
 // Relies only on the app contract in src/app.js. Output is built with DOM APIs (static SVG strings are the only innerHTML).
 
 import WELCOME from '../welcome.md?raw'
+import { leave } from './leave.js'
 
 const TITLES = { files: 'Files', search: 'Search' }
 const PANE_IDS = { files: 'files-pane', search: 'search-pane' }
@@ -581,11 +582,6 @@ export function init(app) {
     const t = document.activeElement || document.body
     t.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true }))
   }
-  function insertText(t) {
-    if (app.state.mode === 'source' && app.code) return app.code.insert(t)
-    refocus()
-    document.execCommand('insertText', false, t)
-  }
   const openAbout = () => {
     app.commands.run('settings.open')
     setTimeout(() => {
@@ -613,7 +609,7 @@ export function init(app) {
     ],
     null,
     ['Undo', press('z'), 'Ctrl+Z'], ['Redo', press('y'), 'Ctrl+Y'], ['Find', 'find.open'], ['Replace', 'find.replace'],
-    ['Edit', [['Go to line', 'text.gotoLine'], ['Search in folder', 'search.folder']]],
+    ['Go to line', 'text.gotoLine'], ['Search in folder', 'search.folder'],
     null,
     [
       'View',
@@ -628,46 +624,6 @@ export function init(app) {
     null,
     ['Help', [['Keyboard shortcuts', 'help.shortcuts'], ['Welcome document', () => app.actions.newTab(WELCOME, 'Welcome.md'), ''], ['About', openAbout, '']]],
   ]
-
-  // developer items from commands.json (userData); re-read every time the menu opens. Bad files or entries never throw.
-  async function customItems() {
-    let raw = null
-    try {
-      raw = window.folio && window.folio.menuItems ? await window.folio.menuItems() : null
-    } catch {}
-    if (!raw) return []
-    let data
-    try {
-      data = JSON.parse(raw)
-    } catch {
-      console.warn('commands.json is not valid JSON; its menu items were skipped')
-      return []
-    }
-    if (!Array.isArray(data)) {
-      console.warn('commands.json must be a list; its menu items were skipped')
-      return []
-    }
-    const out = []
-    let bad = 0
-    for (const e of data.slice(0, 30)) {
-      const ok =
-        e && typeof e === 'object' && typeof e.id === 'string' && e.id && e.id.length <= 60 &&
-        typeof e.label === 'string' && e.label.trim() && e.label.length <= 60 &&
-        ['command', 'openFile', 'insertText'].includes(e.action) &&
-        (e.shortcut === undefined || (typeof e.shortcut === 'string' && e.shortcut.length <= 30)) &&
-        (e.action === 'openFile' || (typeof e.value === 'string' && e.value.length > 0 && e.value.length <= 2000)) &&
-        (e.action !== 'command' || hasCmd(e.value))
-      if (ok) out.push(e)
-      else bad++
-    }
-    if (bad || data.length > 30) console.warn(`commands.json: skipped ${bad || data.length - 30} invalid or extra entries`)
-    return out
-  }
-  function runCustom(e) {
-    if (e.action === 'command') app.commands.run(e.value)
-    else if (e.action === 'openFile') app.actions.openFile()
-    else if (e.action === 'insertText') insertText(e.value)
-  }
 
   // The menu is a bar of drop-downs: the hamburger lists File, Edit, View, Insert, Help; a hovered item opens its drop-down to the
   // right, and an item with more options opens a side sub-menu the same way. menuPanels[i] is the panel at depth i.
@@ -686,7 +642,7 @@ export function init(app) {
     menuHover = false
     menuTok++
     if (!menuPanels.length) return
-    menuPanels.forEach((p) => p.remove())
+    menuPanels.forEach((p) => leave(p))
     menuPanels = []
     railBtns.menu.setAttribute('aria-expanded', 'false')
     if (refocusBtn) railBtns.menu.focus()
@@ -695,7 +651,7 @@ export function init(app) {
     while (menuPanels.length > depth) {
       const p = menuPanels.pop()
       if (p._row) p._row.setAttribute('aria-expanded', 'false')
-      p.remove()
+      leave(p)
     }
   }
   const rowsOf = (items) =>
@@ -743,7 +699,6 @@ export function init(app) {
         b.addEventListener('click', () => {
           closeRailMenu(false)
           if (typeof r[1] === 'string') app.commands.run(r[1])
-          else if (r.custom) runCustom(r.custom)
           else r[1]()
         })
       }
@@ -767,15 +722,10 @@ export function init(app) {
     closeRailMenu()
     closeMenu()
     menuHover = !!hover
-    const tok = ++menuTok
+    ++menuTok
     const ae = document.activeElement
     if (ae && ae.closest && ae.closest('#editor, #cm-host')) lastEditable = ae.closest('.ProseMirror, .cm-content') || ae
-    const custom = await customItems()
-    if (tok !== menuTok) return
     menuTree = MENU.map((m) => (m ? m.slice() : m))
-    if (custom.length) {
-      menuTree.push(null, ['Custom', custom.map((e) => Object.assign([e.label, () => runCustom(e), e.shortcut || ''], { custom: e }))])
-    }
     const top = menuTree.map((t) => (t ? [t[0], t[1], t[2]] : t))
     const panel = openPanel(top, 0, railBtns.menu, !hover)
     panel.setAttribute('aria-label', 'Plume menu')

@@ -1,6 +1,6 @@
 {
   "name": "plume",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Plume",
   "license": "MIT",
   "main": "electron/main.cjs",

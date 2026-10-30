@@ -123,8 +123,14 @@ function createWindow() {
           if (st.js) out.push(await win.webContents.executeJavaScript(st.js))
           if (st.text) for (const ch of st.text) { win.webContents.sendInputEvent({ type: 'keyDown', keyCode: ch }); win.webContents.sendInputEvent({ type: 'char', keyCode: ch }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: ch }) ; await sleep(8) }
           if (st.key) { const mods = st.mods || []; win.webContents.sendInputEvent({ type: 'keyDown', keyCode: st.key, modifiers: mods }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: st.key, modifiers: mods }) }
-          if (st.move) win.webContents.sendInputEvent({ type: 'mouseMove', x: st.move.x, y: st.move.y })
+          // {move: {x, y, drag: true}} moves with the left button held, so Chromium treats it as a drag (selection and autoscroll)
+          if (st.move) win.webContents.sendInputEvent({ type: 'mouseMove', x: st.move.x, y: st.move.y, modifiers: st.move.drag ? ['leftButtonDown'] : [] })
           if (st.click) { const { x, y } = st.click; win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 }); win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 }) }
+          // separate press, move and release, so a drag can be scripted: {down: {x, y}}, {move: {x, y}}, {up: {x, y}}
+          // wheel: {wheel: {x, y, dy}} scrolls at a point, the same way a mouse wheel does
+          if (st.wheel) win.webContents.sendInputEvent({ type: 'mouseWheel', x: st.wheel.x, y: st.wheel.y, deltaX: 0, deltaY: st.wheel.dy, wheelTicksX: 0, wheelTicksY: st.wheel.dy / 120, canScroll: true })
+          if (st.down) win.webContents.sendInputEvent({ type: 'mouseDown', x: st.down.x, y: st.down.y, button: 'left', clickCount: 1 })
+          if (st.up) win.webContents.sendInputEvent({ type: 'mouseUp', x: st.up.x, y: st.up.y, button: 'left', clickCount: 1 })
         } catch (e) { errs.push('step ' + JSON.stringify(st).slice(0, 80) + ': ' + e.message) }
         await sleep(st.wait ?? 400)
         if (st.shot) fs.writeFileSync(path.join(dir, st.shot), (await win.webContents.capturePage()).toPNG())
@@ -411,25 +417,6 @@ ipcMain.handle('app:open-default-apps', async () => {
     return true
   } catch {
     return false
-  }
-})
-
-// Developer menu items: one fixed file in userData, created with an example on first use. No argument, so the renderer cannot choose a path.
-// The renderer validates the entries; only a fixed list of actions is allowed there.
-const MENU_ITEMS_EXAMPLE = JSON.stringify([
-  { id: 'zoom-reset', label: 'Back to normal size', action: 'command', value: 'view.zoomReset' },
-  { id: 'greeting', label: 'Insert greeting', action: 'insertText', value: 'Hello,' },
-  { id: 'pick-file', label: 'Open a file', action: 'openFile' },
-], null, 2)
-ipcMain.handle('app:menu-items', () => {
-  try {
-    const f = path.join(app.getPath('userData'), 'commands.json')
-    if (!fs.existsSync(f)) fs.writeFileSync(f, MENU_ITEMS_EXAMPLE + '\n')
-    const st = fs.statSync(f)
-    if (!st.isFile() || st.size > 65536) return null
-    return fs.readFileSync(f, 'utf8')
-  } catch {
-    return null
   }
 })
 

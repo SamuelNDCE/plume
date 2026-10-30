@@ -12,6 +12,8 @@ import * as statusbar from './modules/statusbar.js'
 import * as mermaidMod from './modules/mermaid.js'
 import * as header from './modules/header.js'
 import * as empty from './modules/empty.js'
+import { initDragReset } from './modules/dragreset.js'
+import { initDragScroll } from './modules/dragscroll.js'
 
 const app = createApp()
 window.__plume = app
@@ -56,6 +58,14 @@ const doc = () => app.state.tabs[app.state.active]
 /* ---------- views ---------- */
 // app.state.mode: 'wysiwyg' (rich Markdown) | 'source' (code editor) | 'table' | 'image' | 'empty'
 function show(view) {
+  // Switching between rich and source: the view that appears slides up a few pixels (CSS `view-in`). Movement only, no opacity, so it
+  // still shows while the window is not being drawn.
+  const incoming = view === 'source' ? cmHost : view === 'wysiwyg' ? scrollEl : null
+  if (incoming && app.state.mode !== view) {
+    incoming.classList.remove('view-in')
+    void incoming.offsetWidth
+    incoming.classList.add('view-in')
+  }
   scrollEl.hidden = view !== 'wysiwyg'
   cmHost.hidden = view !== 'source'
   viewerHost.hidden = view !== 'table' && view !== 'image' && view !== 'viewer'
@@ -783,22 +793,34 @@ function applySettings() {
 }
 app.bus.on('settings:change', applySettings)
 
+// time of the last key press, so the typewriter centring below follows keyboard moves only
+let lastKeyAt = -1e9
+let lastActiveBlock = null
+document.addEventListener('keydown', () => { lastKeyAt = performance.now() }, true)
 document.addEventListener('selectionchange', () => {
-  if (!document.body.classList.contains('focus-mode') && !document.body.classList.contains('typewriter')) return
+  const focusMode = document.body.classList.contains('focus-mode')
+  const typewriter = document.body.classList.contains('typewriter')
+  if (!focusMode && !typewriter) return
   const sel = document.getSelection()
   if (!sel.anchorNode) return
   let n = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode
   const pm = editorEl.querySelector('.ProseMirror')
   if (!pm || !pm.contains(n)) return
   while (n && n.parentElement !== pm) n = n.parentElement
-  pm.querySelectorAll('.is-active-block').forEach((e) => e.classList.remove('is-active-block'))
-  if (n) {
+  if (!n) return
+  // Focus mode dims the blocks other than the current one. The class is only moved when the current block changes: editing a
+  // block on every selection change makes the editor re-render it, which fires another selection change, an endless loop.
+  if (focusMode && n !== lastActiveBlock) {
+    if (lastActiveBlock && lastActiveBlock.isConnected) lastActiveBlock.classList.remove('is-active-block')
     n.classList.add('is-active-block')
-    if (document.body.classList.contains('typewriter')) {
-      const r = n.getBoundingClientRect()
-      const mid = scrollEl.getBoundingClientRect().top + scrollEl.clientHeight / 2
-      scrollEl.scrollBy({ top: r.top - mid + r.height / 2, behavior: 'smooth' })
-    }
+    lastActiveBlock = n
+  }
+  // Typewriter mode centres the cursor line after keyboard moves only, and never touches the editor's DOM. A centring scroll while the
+  // mouse selects text moves the view under the pointer.
+  if (typewriter && performance.now() - lastKeyAt < 400) {
+    const r = n.getBoundingClientRect()
+    const mid = scrollEl.getBoundingClientRect().top + scrollEl.clientHeight / 2
+    scrollEl.scrollBy({ top: r.top - mid + r.height / 2, behavior: 'smooth' })
   }
 })
 
@@ -874,6 +896,8 @@ window.addEventListener(
 )
 
 window.addEventListener('dragover', (e) => e.preventDefault())
+initDragReset()
+initDragScroll()
 window.addEventListener('drop', async (e) => {
   const files = [...(e.dataTransfer?.files || [])]
   if (!files.length) return

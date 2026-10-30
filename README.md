@@ -39,9 +39,13 @@ The same document as highlighted source. Press **`Ctrl+/`** to flip between the 
 
 Four of the eight built-in themes: Light, Sepia, Dark and Midnight.
 
-![The File menu beside the selection bar and its drop-down](docs/screenshots/plume-menus.webp)
+![The File menu with its File submenu open](docs/screenshots/plume-menus.webp)
 
-The File menu, and the selection bar that appears over selected text, with one of its drop-downs open.
+The menu button at the top left. Save and Save As are at the top, and Go to line and Search in folder sit beside Find and Replace.
+
+![The selection bar with its block style drop-down open](docs/screenshots/plume-selection.webp)
+
+Select text and the selection bar appears just below it. Its block style drop-down is open here.
 
 ![CSV opened in the spreadsheet grid with find open](docs/screenshots/plume-spreadsheet.webp)
 

@@ -577,7 +577,8 @@ body:not([data-view="wysiwyg"]) #outline-mini { display: none !important; }
 .ctx-dd-item { gap: 8px; }
 .ctx-dd-check { color: var(--accent); }
 .ctx-dd-check.ctx-dd-off { visibility: hidden; }
-.ctx-menu.ctx-dd.qb-size-panel { min-width: 82px; }
+.ctx-menu.ctx-dd.qb-size-panel { min-width: 64px; }
+.qb-size-panel .ctx-item { padding: 2px 6px; gap: 4px; }
 .ctx-menu.ctx-dd.qb-block-panel { min-width: 182px; }
 .ctx-menu.ctx-sub { z-index: 1201; min-width: 232px; animation-name: ctx-sub-in; animation-duration: 150ms; }
 .ctx-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 26px; padding: 2px 9px; border-radius: 8px; color: var(--fg); text-align: left; font-size: 12px; }
@@ -607,8 +608,10 @@ body:not([data-view="wysiwyg"]) #outline-mini { display: none !important; }
 .ctx-input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 .ctx-input.bad { border-color: var(--fg); }
 .ctx-hint { margin-top: 6px; font-size: 10.7px; color: var(--ctx-dim); }
-@keyframes ctx-in { from { opacity: 0; transform: scale(.97) translateY(-3px); } to { opacity: 1; transform: none; } }
-@keyframes ctx-sub-in { from { opacity: 0; transform: translateX(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+/* Entrance moves only, never fades from opacity 0: while a window is not being drawn (not focused, or behind others) the animation clock
+   does not advance, so an opacity fade left the selection bar invisible. Exits still fade (leave.js). */
+@keyframes ctx-in { from { transform: scale(.97) translateY(-3px); } to { transform: none; } }
+@keyframes ctx-sub-in { from { transform: translateX(-4px) scale(.98); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ctx-menu, .qbar.open { animation: none; } .qbar.expanded, .qb-body, .qbar.expanded .qb-body { transition: none; } }
 
 /* ---------- log view (src/modules/logview.js) ---------- */
@@ -745,6 +748,14 @@ body.sidebar-peek .rail-btn::after, .rail-btn[aria-expanded="true"]::after { opa
 .rail-menu-div { height: 1px; margin: 4px 8px; background: var(--border); }
 .rail-menu-more { font-size: 14px; line-height: 1; color: var(--fg); }
 .rail-menu-item[aria-expanded="true"] { background: var(--hover); }
+/* Rich and source views: the one that appears rises a few pixels (set in show() in main.js). Movement only, see ctx-in above. */
+#editor-scroll.view-in, #cm-host.view-in { animation: view-in 160ms ease-out; }
+@keyframes view-in { from { transform: translateY(8px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { #editor-scroll.view-in, #cm-host.view-in { animation: none; } }
+/* Every menu and drop-down fades out before it is removed (see leave.js). */
+.leaving { animation: popup-out 120ms ease-in forwards !important; }
+@keyframes popup-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .leaving { animation-duration: 1ms !important; } }
 .rail-help-link:focus-visible { outline: 2px solid var(--ring, var(--accent)); outline-offset: 1px; }
 .rail-help { position: fixed; z-index: 1100; width: 280px; padding: 12px 14px; background: var(--bg-3); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); animation: menu-in 120ms ease-out; }
 .rail-help-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
