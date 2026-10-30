@@ -1,10 +1,10 @@
 // Document quick bar and right-click menu (Rich and Source views), one component.
 //   Select text: a slim one-row bar floats below the selection. It is the ONE place for the common changes:
-//   block style (Paragraph, Title, Heading 2, Heading 3), inline (Bold, Italic, Underline, Strikethrough, Code),
-//   insert (Link, Quote, Bullet, Numbered, Task list) and size (Smaller, Larger, a preset select).
+//   block style, inline (Bold, Italic, Underline, Strikethrough, Code),
+//   and size (a drop-down of the text sizes). The block-style drop-down lists Paragraph, Title, Heading 2 to 6, Quote and Code block.
 //   It replaces Crepe's own selection toolbar (turned off in main.js).
 //   Right-click: the SAME bar expands in place into the menu. The bar row stays on top, and the menu rows
-//   (Clipboard, Find, More blocks, Insert, Edit) open below it; each opens a submenu on hover (short intent
+//   (Clipboard, direct Link, Quote, Bullet list, Numbered list and Task list, Find, then Insert more and Edit) open below it; each submenu opens on hover (short intent
 //   delay) or with the Right arrow. Left closes a submenu, Escape closes the menu. Nothing the bar shows is repeated in the menu.
 // Rich view sends the same shortcuts Milkdown binds (checked in preset-commonmark and preset-gfm): Ctrl+B, Ctrl+I,
 // Ctrl+E, Ctrl+Alt+X, Ctrl+Alt+0..6, Ctrl+Alt+7/8, Ctrl+Alt+C, Ctrl+Shift+B. Task list, divider, link and clear
@@ -571,6 +571,11 @@ export function init(app) {
     { label: 'Title', action: 'title', key: 1, kbd: 'Ctrl+Alt+1' },
     { label: 'Heading 2', action: 'h2', key: 2, kbd: 'Ctrl+Alt+2' },
     { label: 'Heading 3', action: 'h3', key: 3, kbd: 'Ctrl+Alt+3' },
+    { label: 'Heading 4', action: 'h4', key: 4, kbd: 'Ctrl+Alt+4' },
+    { label: 'Heading 5', action: 'h5', key: 5, kbd: 'Ctrl+Alt+5' },
+    { label: 'Heading 6', action: 'h6', key: 6, kbd: 'Ctrl+Alt+6' },
+    { label: 'Quote', action: 'quote', key: 'quote', kbd: 'Ctrl+Shift+B' },
+    { label: 'Code block', action: 'codeblock', key: 'code', kbd: 'Ctrl+Alt+C' },
   ]
   // The block name shown on the trigger: the standard styles by number, anything else by what the line is.
   function blockName(st) {
@@ -583,7 +588,8 @@ export function init(app) {
     if (st.block === 1) return 'Title'
     return 'Heading ' + st.block
   }
-  const isStd = (st) => !st.codeblock && !st.task && !st.bullets && !st.numbers && !st.quote && (st.block || 0) <= 3
+  // Which BLOCKS row is current: a code block or quote by name, a list has no row (it gets its own), else the heading level.
+  const blockKeyOf = (st) => (st.codeblock ? 'code' : st.task || st.bullets || st.numbers ? null : st.quote ? 'quote' : st.block || 0)
   const bar = el('div', 'qbar')
   bar.id = 'qbar'
   bar.hidden = true
@@ -629,7 +635,7 @@ export function init(app) {
       if (dd && dd.trigger === t) return closeDd()
       closeDd()
       closeSubs()
-      const panel = el('div', 'ctx-menu ctx-dd')
+      const panel = el('div', 'ctx-menu ctx-dd ' + cls + '-panel')
       panel.setAttribute('role', 'listbox')
       panel.setAttribute('aria-label', name)
       const rows = []
@@ -713,12 +719,13 @@ export function init(app) {
     if (q.block) {
       blockDd = makeDropdown('qb-block', 'Block style', 'Block style', () => {
         const st = barState()
-        const rows = BLOCKS.map((b) => ({ ...b, on: isStd(st) && (st.block || 0) === b.key }))
-        if (!isStd(st)) rows.push({ label: blockName(st), action: null, on: true })
+        const cur = blockKeyOf(st)
+        const rows = BLOCKS.map((b) => ({ ...b, on: b.key === cur }))
+        if (cur === null) rows.push({ label: blockName(st), action: null, on: true })
         return rows
       }, (it) => {
         focusEditor()
-        if (!it.action) return
+        if (!it.action || it.on) return
         run(it.action)
         afterPick()
       })
@@ -880,6 +887,10 @@ export function init(app) {
     scheduleBar()
   })
   document.addEventListener('mousedown', (e) => {
+    // a click or right-click anywhere outside the open bar drop-down (and its own trigger) closes it
+    if (dd && !dd.panel.contains(e.target) && !dd.trigger.contains(e.target)) closeDd()
+  }, true)
+  document.addEventListener('mousedown', (e) => {
     if (bar.hidden || bar.contains(e.target) || root.contains(e.target) || docEl.contains(e.target)) return
     hideAll()
     hideBar()
@@ -895,19 +906,8 @@ export function init(app) {
   // Grouped by what the user does, each group with a small heading and about six rows at most.
   // Copy and Paste are single clicks. Only items the app really supports are listed.
   // Source view edits plain text: only items that insert Markdown syntax or edit text, no block or mark commands.
-  function sourceModel(level, clip) {
-    const md = [
-      { label: 'Heading 4', badge: 'H4', action: 'h4' },
-      { label: 'Heading 5', badge: 'H5', action: 'h5' },
-      { label: 'Heading 6', badge: 'H6', action: 'h6' },
-      { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
-      { label: 'Quote', icon: 'quote', action: 'quote' },
-      { label: 'Bullet list', icon: 'bullets', action: 'bullets' },
-      { label: 'Numbered list', icon: 'numbers', action: 'numbers' },
-      { label: 'Task list', icon: 'task', action: 'task' },
-      { label: 'Table', icon: 'table', action: 'table' },
-      { label: 'Code block', icon: 'codeblock', action: 'codeblock' },
-    ]
+  function sourceModel(level, clip, direct) {
+    // Block style (headings, quote, code block), inline marks and size live in the bar. Link, quote and the lists are direct rows.
     const line = [
       { label: 'Select line', icon: 'line', action: 'selectLine' },
       { label: 'Duplicate line', icon: 'dup', action: 'dupLine' },
@@ -921,47 +921,39 @@ export function init(app) {
       { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
       { label: 'Word count', icon: 'count', action: 'wordcount' },
     ]
+    const table = { label: 'Table', icon: 'table', action: 'table' }
     const find = [{ label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }, { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' }]
-    if (level >= 2) {
-      return [{ head: 'Menu', noHead: true, items: [{ label: 'Clipboard', icon: 'paste', sub: clip }, { label: 'Markdown', icon: 'format', sub: md }, { label: 'More', icon: 'insert', sub: [...find, { sep: true }, ...line, { sep: true }, ...edit] }] }]
+    if (level >= 1) {
+      return [
+        { head: 'Clipboard', noHead: true, items: level >= 2 ? [{ label: 'Clipboard', icon: 'paste', sub: clip }] : clip },
+        { head: 'Insert', noHead: true, items: direct },
+        { head: 'Menu', noHead: true, items: [find[0], { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], { sep: true }, ...line, { sep: true }, ...edit] }] },
+      ]
     }
     return [
-      { head: 'Clipboard', noHead: level >= 1, items: clip },
-      { head: 'Find', noHead: true, items: [find[0], { label: 'Markdown', icon: 'format', sub: md }, { label: 'Line', icon: 'line', sub: line }, { label: 'More', icon: 'insert', sub: [find[1], { sep: true }, ...edit] }] },
+      { head: 'Clipboard', items: clip },
+      { head: 'Insert', items: direct },
+      { head: 'Menu', noHead: true, items: [find[0], { label: 'Line', icon: 'line', sub: line }, { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], { sep: true }, ...edit] }] },
     ]
   }
 
   function menuModel(level = 0) {
     const src = !rich()
-    // Block style, inline marks and size live in the quick bar. Link, quote and the lists live here, under Insert.
-    const blocks = [
-      { label: 'Heading 4', badge: 'H4', kbd: 'Ctrl+Alt+4', action: 'h4', sample: { scale: 1, weight: 650 } },
-      { label: 'Heading 5', badge: 'H5', kbd: 'Ctrl+Alt+5', action: 'h5', sample: { scale: 0.95, weight: 650 } },
-      { label: 'Heading 6', badge: 'H6', kbd: 'Ctrl+Alt+6', action: 'h6', sample: { scale: 0.85, weight: 650 } },
-      { sep: true },
-      { label: 'Code block', icon: 'codeblock', kbd: 'Ctrl+Alt+C', action: 'codeblock' },
-    ]
-    const insert = [
+    // Block style, inline marks and size live in the quick bar. Link, quote and the lists are direct rows here (none is on the bar).
+    const direct = [
       { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
       { label: 'Quote', icon: 'quote', kbd: 'Ctrl+Shift+B', action: 'quote' },
       { label: 'Bullet list', icon: 'bullets', kbd: 'Ctrl+Alt+8', action: 'bullets' },
       { label: 'Numbered list', icon: 'numbers', kbd: 'Ctrl+Alt+7', action: 'numbers' },
       { label: 'Task list', icon: 'task', action: 'task' },
-      { sep: true },
+    ]
+    const more = [
       { label: 'Table', icon: 'table', action: 'table' },
       { label: 'Date and time', icon: 'calendar', kbd: 'Ctrl+Shift+D', action: 'datetime' },
       { label: 'Divider', icon: 'divider', action: 'divider' },
     ]
     const edit = [
       { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
-      ...(src
-        ? [
-            { label: 'Select line', icon: 'line', action: 'selectLine' },
-            { label: 'Duplicate line', icon: 'dup', action: 'dupLine' },
-            { label: 'Move line up', icon: 'up', action: 'lineUp' },
-            { label: 'Move line down', icon: 'down', action: 'lineDown' },
-          ]
-        : []),
       { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
       { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
       { sep: true },
@@ -972,20 +964,18 @@ export function init(app) {
     ]
     const clip = [{ label: 'Cut', icon: 'cut', kbd: 'Ctrl+X', action: 'cut' }, { label: 'Copy', icon: 'copy', kbd: 'Ctrl+C', action: 'copy' }, { label: 'Paste', icon: 'paste', kbd: 'Ctrl+V', action: 'paste' }]
     const find = { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }
-    if (src) return sourceModel(level, clip)
-    const moreBlocks = { label: 'More blocks', icon: 'block', sub: blocks }
-    if (level >= 2) {
-      return [{ head: 'Menu', noHead: true, items: [{ label: 'Clipboard', icon: 'paste', sub: clip }, find, moreBlocks, { label: 'More', icon: 'insert', sub: [...insert, { sep: true }, ...edit] }] }]
-    }
-    if (level === 1) {
+    if (src) return sourceModel(level, clip, direct)
+    if (level >= 1) {
       return [
-        { head: 'Clipboard', noHead: true, items: clip },
-        { head: 'Menu', noHead: true, items: [find, moreBlocks, { label: 'More', icon: 'insert', sub: [...insert, { sep: true }, ...edit] }] },
+        { head: 'Clipboard', noHead: true, items: level >= 2 ? [{ label: 'Clipboard', icon: 'paste', sub: clip }] : clip },
+        { head: 'Insert', noHead: true, items: direct },
+        { head: 'Menu', noHead: true, items: [find, { label: 'More', icon: 'insert', sub: [...more, { sep: true }, ...edit] }] },
       ]
     }
     return [
       { head: 'Clipboard', items: clip },
-      { head: 'Menu', noHead: true, items: [find, moreBlocks, { label: 'Insert', icon: 'insert', sub: insert }, { label: 'Edit', icon: 'selectall', sub: edit }] },
+      { head: 'Insert', items: direct },
+      { head: 'Menu', noHead: true, items: [find, { label: 'Insert more', icon: 'insert', sub: more }, { label: 'Edit', icon: 'selectall', sub: edit }] },
     ]
   }
 
@@ -1251,6 +1241,7 @@ export function init(app) {
   }
 
   function openMenu(x, y) {
+    closeDd() // one floating panel at a time: a bar drop-down never stays under the menu
     captureRestore()
     if (expanded) hideAll()
     const sel = selectionRect()
@@ -1358,6 +1349,10 @@ export function init(app) {
   document.addEventListener('keydown', (e) => {
     const k = e.key
     if (dd && dd.panel.contains(document.activeElement)) return // the open drop-down handles its own keys
+    if (dd && e.key === 'Escape') { // opened with the mouse, so focus is elsewhere: Escape still closes it first
+      e.preventDefault()
+      return closeDd()
+    }
     if (bar.hidden) return
     // collapsed bar: Escape dismisses it for this selection
     if (!expanded && k === 'Escape') {
