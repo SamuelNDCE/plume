@@ -1,7 +1,10 @@
 // PDF viewer. mount(host, doc, app) fills the host with a toolbar and a continuous, lazily rendered page column.
 // pdf.js (and its worker, same-origin via Vite) is imported on first use, so startup is unaffected.
 // Only pages near the viewport hold a canvas and a text layer; the rest are empty boxes of the right size.
-// Out of scope here: password prompt, print, export, annotations/forms, link clicking.
+// Out of scope here: password prompt, link clicking.
+// Editing (annotations, page edits, form fields) lives in pdfedit.js, loaded on first use through withEdit(). Rotating a page now edits the
+// file (written on save); the old view-only ROT map below is no longer filled.
+// Print builds a sheet of page images (every page, with its rotation) and calls window.print(), see printPdf().
 
 import { isTextField, wrapCommand, shortcutPanel, PDF_KEYS } from './shortcuts.js'
 
@@ -14,6 +17,9 @@ const KEEP = 4 // pages kept beyond the visible range, everything further is rel
 const MAX_JOBS = 2
 const MAX_PIXELS = 36e6 // per canvas, lowers the output scale instead of failing on huge zooms
 const SAVED = new WeakMap() // doc -> { page, mode, pct } so a tab switch returns to the same spot
+const ROT = new WeakMap() // doc -> Map(page index -> extra clockwise degrees 0/90/180/270), view only. Unused since rotation is saved by pdfedit.js
+const EDITOPEN = new WeakSet() // docs whose edit toolbar is open, so a re-mount after an edit keeps it open
+const PRINT_SCALE = 2 // css px per pdf point on the print sheet (144 dpi)
 
 let libPromise = null
 const loadLib = () =>
@@ -34,6 +40,9 @@ const ICON = {
   fitP: svg('<rect x="7" y="3" width="10" height="18" rx="1"/>'),
   find: svg('<circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/>'),
   close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  rotate: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>'),
+  edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'),
+  print: svg('<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><path d="M7 14h10v7H7z"/>'),
 }
 
 const el = (tag, cls, attrs) => {
@@ -148,8 +157,13 @@ class Thumbs {
     this.list.appendChild(frag)
     this.list.addEventListener('click', (e) => {
       const b = e.target.closest('.pdfp-item')
-      if (b) this.v.goTo(Number(b.dataset.i) + 1)
+      if (b) {
+        if (document.activeElement !== b) b.focus({ preventScroll: true }) // a click on a button does not always focus it
+        this.v.goTo(Number(b.dataset.i) + 1)
+      }
     })
+    // keyboard on the list: one page per key press, the main view follows at once
+    this.list.addEventListener('keydown', (e) => this.onKey(e))
     this.io = new IntersectionObserver(
       (ents) => {
         for (const en of ents) {
@@ -170,11 +184,43 @@ class Thumbs {
     }, 260)
   }
 
+  onKey(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+    const b = e.target.closest && e.target.closest('.pdfp-item')
+    if (!b) return
+    const at = Number(b.dataset.i) + 1
+    const k = e.key
+    let to = 0
+    if (k === 'ArrowDown' || k === 'ArrowRight' || k === 'PageDown') to = at + 1
+    else if (k === 'ArrowUp' || k === 'ArrowLeft' || k === 'PageUp') to = at - 1
+    else if (k === 'Home') to = 1
+    else if (k === 'End') to = this.v.n
+    else return
+    e.preventDefault()
+    e.stopPropagation()
+    to = clamp(to, 1, this.v.n)
+    this.v.goTo(to)
+    const it = this.items[to - 1]
+    if (!it) return
+    it.b.focus({ preventScroll: true })
+    it.b.scrollIntoView({ block: 'nearest' })
+  }
+
+  // a page was rotated: new box height, new picture
+  rotated(i) {
+    const it = this.items[i]
+    if (!it || !this.pane) return
+    this.sync()
+    this.drop(i)
+    this.want(i)
+  }
+
   sync() {
     if (!this.pane) return
     this.v.pages.forEach((pg, i) => {
       const it = this.items[i]
-      const ar = pg.h / pg.w
+      const d = this.v.dims(i)
+      const ar = d.h / d.w
       if (it && it.ar !== ar) {
         it.ar = ar
         it.box.style.height = Math.round(THUMB_W * ar) + 'px'
@@ -223,9 +269,10 @@ class Thumbs {
     try {
       const page = await this.v.pdf.getPage(i + 1)
       if (this.dead || tok !== it.tok) return
-      const base = page.getViewport({ scale: 1 })
+      const rotation = this.v.rotation(page, i)
+      const base = page.getViewport({ scale: 1, rotation })
       const scale = THUMB_W / base.width
-      const vp = page.getViewport({ scale })
+      const vp = page.getViewport({ scale, rotation })
       const dpr = window.devicePixelRatio || 1
       const canvas = el('canvas', 'pdfp-canvas')
       canvas.width = Math.max(1, Math.floor(vp.width * dpr))
@@ -326,10 +373,24 @@ class PdfViewer {
     this.fitWB = btn(ICON.fitW, 'Fit width (Ctrl+0)')
     this.fitPB = btn(ICON.fitP, 'Fit page (Ctrl+Shift+0)')
     this.findB = btn(ICON.find, 'Find in PDF (Ctrl+F)')
+    this.rotB = btn(ICON.rotate, 'Rotate page 90 degrees clockwise (Ctrl+Shift+R). Saved to the file when you save')
+    this.printB = btn(ICON.print, 'Print the PDF (Ctrl+P)')
+    this.editB = btn(ICON.edit, 'Edit tools: highlight, notes, ink, page edits, cover and retype. Nothing is written until you save')
+    this.editB.setAttribute('aria-pressed', 'false')
+    this.editBar = el('div', 'pdfv-bar pdfedit-bar')
+    this.editBar.hidden = true
     const sep = () => el('span', 'find-sep', { role: 'separator', 'aria-hidden': 'true' })
     const grow = el('span', 'pdfv-grow')
-    bar.append(this.prevB, this.pageIn, this.pageTot, this.nextB, sep(), this.zoomOutB, this.zoomSel, this.zoomInB, sep(), this.fitWB, this.fitPB, grow, this.findB)
+    bar.append(this.prevB, this.pageIn, this.pageTot, this.nextB, sep(), this.zoomOutB, this.zoomSel, this.zoomInB, sep(), this.fitWB, this.fitPB, sep(), this.rotB, grow, this.editB, this.printB, this.findB)
     this.buildZoomOptions()
+    // page-number box: opens when digits are typed while the viewer has focus
+    const jb = (this.jumpBox = el('div', 'pdfv-jump', { role: 'dialog', 'aria-label': 'Go to page' }))
+    jb.hidden = true
+    const jl = el('span', 'pdfv-jump-label')
+    jl.textContent = 'Go to page'
+    this.jumpIn = el('input', 'pdfv-jump-in', { type: 'text', inputmode: 'numeric', 'aria-label': 'Page number, Enter to go, Escape to cancel', autocomplete: 'off', spellcheck: 'false' })
+    this.jumpTot = el('span', 'pdfv-jump-total')
+    jb.append(jl, this.jumpIn, this.jumpTot)
 
     this.scroller = el('div', 'pdfv-scroll', { tabindex: '0', role: 'document', 'aria-label': this.d.name + ', PDF pages' })
     this.pagesEl = el('div', 'pdfv-pages')
@@ -348,7 +409,7 @@ class PdfViewer {
     row.append(this.findIn, this.findCount, this.fPrev, this.fNext, this.fClose)
     fb.appendChild(row)
 
-    root.append(bar, this.scroller, this.status, fb)
+    root.append(bar, this.editBar, this.scroller, this.status, fb, jb)
     this.panel = shortcutPanel(root, PDF_KEYS, ICON.close)
     this.host.appendChild(root)
     this.wire()
@@ -425,6 +486,24 @@ class PdfViewer {
       else if (v !== 'custom') this.setZoom('custom', Number(v))
     })
     this.on(this.findB, 'click', () => (this.fbar.hidden ? this.openFind() : this.closeFind()))
+    this.on(this.rotB, 'click', () => this.rotateCurrent())
+    this.on(this.printB, 'click', () => this.printPdf())
+    this.on(this.editB, 'click', () => this.toggleEdit())
+    this.on(this.jumpIn, 'keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        e.stopPropagation()
+        const v = parseInt(this.jumpIn.value, 10)
+        this.closeJump()
+        if (Number.isFinite(v)) this.goTo(v)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        this.closeJump()
+      }
+    })
+    this.on(this.jumpIn, 'input', () => (this.jumpIn.value = this.jumpIn.value.replace(/\D/g, '').slice(0, String(this.n).length)))
+    this.on(this.jumpIn, 'blur', () => this.closeJump(true))
     this.on(this.fNext, 'click', () => this.step(1))
     this.on(this.fPrev, 'click', () => this.step(-1))
     this.on(this.fClose, 'click', () => this.closeFind())
@@ -475,6 +554,15 @@ class PdfViewer {
     // this viewer owns Ctrl+F (and Ctrl+H, there is nothing to replace) only while it is the active view
     this.cleanups.push(wrapCommand(this.app, 'find.open', act, () => this.openFind(), true))
     this.cleanups.push(wrapCommand(this.app, 'find.replace', act, () => this.openFind(), true))
+    // Ctrl+Shift+R (Show Recent Files elsewhere) rotates and Ctrl+P (command palette elsewhere) prints, only for those exact key
+    // presses while this viewer is active. The header's palette button and the rail's Recent button run the same commands from a
+    // click, and those must keep working, hence the check of the event that is being handled.
+    const hot = (ch, shift) => () => {
+      const ev = window.event
+      return this.isActive() && !!ev && ev.type === 'keydown' && (ev.ctrlKey || ev.metaKey) && !ev.altKey && ev.shiftKey === shift && String(ev.key).toLowerCase() === ch
+    }
+    this.cleanups.push(wrapCommand(this.app, 'recent.show', hot('r', true), () => this.rotateCurrent(), true))
+    this.cleanups.push(wrapCommand(this.app, 'palette.open', hot('p', false), () => this.printPdf(), true))
     this.on(document, 'keydown', (e) => this.onKey(e))
     // a theme switch repaints the pages with the new paper colour
     const tmo = new MutationObserver(() => {
@@ -515,8 +603,12 @@ class PdfViewer {
       return this.fbar.hidden ? this.openFind() : this.step(e.shiftKey ? -1 : 1)
     }
     if (mod && e.shiftKey && !e.altKey && e.code === 'Digit0') return stop(), this.setZoom('page')
-    if (isTextField(t)) return
+    if (isTextField(t) || (t && t.closest && t.closest('.pdfedit-fields, .pdfedit-pop'))) return
     if (k === 'F1') return stop(), this.panel.toggle()
+    if (!mod && !e.altKey && k.length === 1 && k >= '0' && k <= '9') {
+      const inThumbs = !!(this.thumbs && this.thumbs.pane && this.thumbs.pane.contains(t))
+      if (t === document.body || t === document.documentElement || this.scroller.contains(t) || inThumbs) return stop(), this.openJump(k)
+    }
     const inView = t === document.body || t === document.documentElement || this.scroller.contains(t)
     if (mod && !e.altKey) {
       if ((k === 'g' || k === 'G') && !e.shiftKey) return stop(), this.pageIn.focus(), this.pageIn.select()
@@ -569,6 +661,7 @@ class PdfViewer {
   /* ---------- open ---------- */
   async open() {
     let lib
+    this.d.readOnly = false // PDFs can be edited and saved now (pdfedit.js), so the status bar must not say read-only preview
     try {
       lib = await loadLib()
       this.lib = lib
@@ -590,6 +683,12 @@ class PdfViewer {
         console.warn('[pdfview] thumbnails', e)
         this.thumbs = null
       }
+      // a PDF with fillable fields (or an edit session in progress) loads the editor before the first page is drawn
+      this.formMode = !!(await this.pdf.getFieldObjects().catch(() => null))
+      if (this.dead) return
+      if (this.formMode || EDITOPEN.has(this.d)) await this.withEdit((m) => (this.ed = m.attach(this)))
+      if (this.dead) return
+      this.setEditUi(EDITOPEN.has(this.d))
       const sv = SAVED.get(this.d)
       if (sv) {
         this.mode = sv.mode
@@ -671,9 +770,184 @@ class PdfViewer {
     }
   }
 
+  /* ---------- editing (pdfedit.js) ---------- */
+  async withEdit(fn) {
+    try {
+      const m = await (this.edMod ||= import('./pdfedit.js'))
+      if (this.dead) return
+      return await fn(m)
+    } catch (e) {
+      console.warn('[pdfview] edit', e)
+      if (!this.dead) this.app.toast && this.app.toast('Editing is not available: ' + String((e && e.message) || e).slice(0, 100))
+    }
+  }
+
+  setEditUi(open) {
+    this.editBar.hidden = !open
+    this.editB.classList.toggle('on', open)
+    this.editB.setAttribute('aria-pressed', String(open))
+  }
+
+  async toggleEdit() {
+    const open = !EDITOPEN.has(this.d)
+    if (open) {
+      EDITOPEN.add(this.d)
+      if (!this.ed) await this.withEdit((m) => (this.ed = m.attach(this)))
+    } else EDITOPEN.delete(this.d)
+    this.setEditUi(open)
+  }
+
+  // show the edited bytes: a fresh viewer on the same tab (page and zoom are kept by SAVED)
+  reload() {
+    if (!this.dead) return mount(this.host, this.d, this.app)
+  }
+
+  /* ---------- rotation, jump box, print ---------- */
+  extra(i) {
+    const m = ROT.get(this.d)
+    return (m && m.get(i)) || 0
+  }
+
+  // absolute rotation for pdf.js: the page's own rotation plus the viewing rotation
+  rotation(page, i) {
+    return (((page.rotate || 0) + this.extra(i)) % 360 + 360) % 360
+  }
+
+  // page size in pdf points as shown (width and height swap at 90 and 270)
+  dims(i) {
+    const pg = this.pages[i]
+    return this.extra(i) % 180 ? { w: pg.h, h: pg.w } : { w: pg.w, h: pg.h }
+  }
+
+  // Rotation is an edit now: written to the file on save, undoable (see pdfedit.js)
+  rotateCurrent() {
+    if (!this.pdf || !this.n) return
+    return this.withEdit(async (m) => {
+      if (!this.ed) this.ed = m.attach(this)
+      return this.ed.rotate()
+    })
+  }
+
+  // the old view-only rotation, kept for reference and not called
+  rotateViewOnly() {
+    if (!this.pdf || !this.n) return
+    const i = this.cur - 1
+    let m = ROT.get(this.d)
+    if (!m) ROT.set(this.d, (m = new Map()))
+    const next = (this.extra(i) + 90) % 360
+    if (next) m.set(i, next)
+    else m.delete(i)
+    this.root.dataset.rotated = i + 1 + ':' + next
+    this.release(i)
+    this.applyZoom()
+    this.goTo(i + 1)
+    if (this.thumbs) this.thumbs.rotated(i)
+    this.refresh()
+  }
+
+  openJump(first) {
+    this.jumpTot.textContent = '/ ' + this.n
+    this.jumpBox.hidden = false
+    this.jumpIn.value = first
+    this.jumpIn.focus()
+    this.jumpIn.setSelectionRange(first.length, first.length)
+  }
+
+  closeJump(fromBlur) {
+    if (this.jumpBox.hidden) return
+    this.jumpBox.hidden = true
+    if (!fromBlur) this.scroller.focus({ preventScroll: true })
+  }
+
+  // Print: every page is drawn to an image on a sheet that only shows in print (see .pdfv-printsheet in modules.css), then
+  // window.print() opens the system print dialog. Pages carry their viewing rotation.
+  async printPdf() {
+    if (!this.pdf || !this.n || this.printing) return
+    this.printing = true
+    const total = this.n
+    const sheet = el('div', 'pdfv-printsheet', { 'aria-hidden': 'true' })
+    const urls = []
+    this.status.hidden = false
+    try {
+      for (let i = 0; i < total; i++) {
+        if (this.dead) return
+        this.status.textContent = 'Preparing to print, page ' + (i + 1) + ' of ' + total + '...'
+        const page = await this.pdf.getPage(i + 1)
+        // Same pixel cap as the on-screen render: a crafted page size lowers the print scale instead of allocating a huge canvas.
+        const rot = this.rotation(page, i)
+        const base = page.getViewport({ scale: PRINT_SCALE, rotation: rot })
+        const k = Math.min(1, Math.sqrt(MAX_PIXELS / Math.max(1, base.width * base.height)))
+        const vp = k < 1 ? page.getViewport({ scale: PRINT_SCALE * k, rotation: rot }) : base
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.max(1, Math.floor(vp.width))
+        canvas.height = Math.max(1, Math.floor(vp.height))
+        // the on-screen render and the thumbnails call page.cleanup() on the same page object, which cancels a render in flight: retry
+        for (let tries = 0; ; tries++) {
+          try {
+            await page.render({ canvas, viewport: vp, background: 'rgb(255,255,255)' }).promise
+            break
+          } catch (e) {
+            if (tries >= 4 || !e || e.name !== 'RenderingCancelledException') throw e
+            await tick()
+          }
+        }
+        const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92))
+        canvas.width = canvas.height = 0
+        if (!blob) throw new Error('page image failed')
+        const url = URL.createObjectURL(blob)
+        urls.push(url)
+        const img = el('img', 'pdfv-printpage', { alt: '', src: url })
+        sheet.appendChild(img)
+        await new Promise((res) => {
+          img.onload = img.onerror = res
+          if (img.complete) res()
+        })
+        // no timer here: a hidden or background window throttles setTimeout to about one per second
+      }
+      if (this.dead) return
+      document.body.appendChild(sheet)
+      document.body.classList.add('pdf-printing')
+      this.root.dataset.printPages = String(total)
+      let cleaned = false
+      const clean = () => {
+        if (cleaned) return
+        cleaned = true
+        window.removeEventListener('afterprint', clean)
+        document.body.classList.remove('pdf-printing')
+        sheet.remove()
+        urls.forEach((u) => URL.revokeObjectURL(u))
+      }
+      window.addEventListener('afterprint', clean)
+      setTimeout(clean, 10 * 60 * 1000) // safety net if afterprint never arrives
+      this.status.hidden = true
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      this.root.dataset.printCalled = String((Number(this.root.dataset.printCalled) || 0) + 1)
+      window.print()
+    } catch (e) {
+      console.warn('[pdfview] print', e && (e.name || '') + ' ' + (e.message || ''))
+      this.status.textContent = 'Could not prepare the PDF for printing.'
+      setTimeout(() => (this.status.hidden = true), 4000)
+      urls.forEach((u) => URL.revokeObjectURL(u))
+      document.body.classList.remove('pdf-printing')
+      sheet.remove()
+    } finally {
+      this.printing = false
+      if (!this.dead && this.status.textContent.startsWith('Preparing')) this.status.hidden = true
+    }
+  }
+
   /* ---------- layout and zoom ---------- */
   fitScale(mode) {
-    const p = this.pages[0]
+    let p = this.dims(0)
+    if (ROT.get(this.d) && ROT.get(this.d).size) {
+      // a rotated page may be wider or taller than the first: fit the widest and tallest so none needs a sideways scroll
+      p = { w: 0, h: 0 }
+      for (let i = 0; i < this.n; i++) {
+        const d = this.dims(i)
+        p.w = Math.max(p.w, d.w)
+        p.h = Math.max(p.h, d.h)
+      }
+    }
     // same reading column as the Markdown editor: capped at --doc-width
     const docW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--doc-width')) || 820
     const cw = Math.max(80, Math.min(this.scroller.clientWidth - 48, docW))
@@ -697,8 +971,9 @@ class PdfViewer {
     const s = this.scale
     for (let i = 0; i < this.n; i++) {
       const pg = this.pages[i]
-      const w = pg.w * s
-      const h = pg.h * s
+      const d = this.dims(i)
+      const w = d.w * s
+      const h = d.h * s
       if (pg._w !== w || pg._h !== h) {
         pg.box.style.width = w + 'px'
         pg.box.style.height = h + 'px'
@@ -759,6 +1034,8 @@ class PdfViewer {
     const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (smooth && !calm && Math.abs(y - this.scroller.scrollTop) < this.scroller.clientHeight * 3) this.scroller.scrollTo({ top: y, behavior: 'smooth' })
     else this.scroller.scrollTop = y
+    // near the end the scroll position is clamped and the page found from it would be an earlier one: remember the target
+    this.pin = smooth ? null : { n, top: this.scroller.scrollTop }
     this.cur = n
     this.syncPageUi()
     this.schedule()
@@ -779,7 +1056,8 @@ class PdfViewer {
     const first = this.pageAt(st)
     const last = this.pageAt(st + vh)
     const atBottom = st > 0 && st >= this.scroller.scrollHeight - vh - 2
-    const probe = atBottom ? this.n - 1 : this.pageAt(st + Math.min(vh / 3, 80))
+    if (this.pin && Math.abs(st - this.pin.top) > 2) this.pin = null
+    const probe = this.pin ? this.pin.n - 1 : atBottom ? this.n - 1 : this.pageAt(st + Math.min(vh / 3, 80))
     if (probe + 1 !== this.cur) {
       this.cur = probe + 1
       this.syncPageUi()
@@ -878,7 +1156,7 @@ class PdfViewer {
     try {
       const page = await this.pdf.getPage(i + 1)
       if (stale()) return finish()
-      const vp = page.getViewport({ scale })
+      const vp = page.getViewport({ scale, rotation: this.rotation(page, i) })
       const v1 = page.getViewport({ scale: 1 })
       if (Math.abs(pg.w - v1.width) > 0.01 || Math.abs(pg.h - v1.height) > 0.01) {
         pg.w = v1.width
@@ -891,7 +1169,7 @@ class PdfViewer {
       canvas.className = 'pdfv-canvas'
       canvas.width = Math.max(1, Math.floor(vp.width * out))
       canvas.height = Math.max(1, Math.floor(vp.height * out))
-      const rt = page.render({ canvas, viewport: vp, transform: out !== 1 ? [out, 0, 0, out, 0, 0] : undefined, background: this.paper() })
+      const rt = page.render({ canvas, viewport: vp, transform: out !== 1 ? [out, 0, 0, out, 0, 0] : undefined, background: this.paper(), annotationMode: this.formMode ? this.lib.AnnotationMode.ENABLE_FORMS : undefined })
       pg.renderTask = rt
       await rt.promise
       if (stale()) {
@@ -922,6 +1200,7 @@ class PdfViewer {
       pg.textEl = textEl
       pg.box.appendChild(textEl)
       pg.textDone = true
+      if (this.ed) this.ed.pageRendered(i, page)
       this.applyHighlights()
       this.resolveWaiters(i)
       finish()
@@ -1150,12 +1429,15 @@ class PdfViewer {
     if (this.n) SAVED.set(this.d, { page: this.cur, mode: this.mode, pct: Math.round((this.scale / CSS_UNITS) * 100) })
     this.dead = true
     this.sTok++
+    document.body.classList.remove('pdf-printing')
     cancelAnimationFrame(this.raf)
     clearTimeout(this.zoomTimer)
     this.clearHighlights()
     for (const f of this.cleanups.splice(0)) {
       try { f() } catch {}
     }
+    if (this.ed) this.ed.destroy()
+    this.ed = null
     if (this.thumbs) this.thumbs.destroy()
     this.thumbs = null
     this.cleanupDoc()

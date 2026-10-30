@@ -4,17 +4,16 @@
 
 # Plume
 
-**Plume, the free, open-source universal file editor. Open and edit Markdown, text, logs, CSV, Excel, Word and PDF in one fast, beautiful app.**
+**A free, open-source universal file editor. Open and edit Markdown, text, logs, CSV, Excel and PDF, and read Word files, in one fast app.**
 
 [![Release](https://img.shields.io/github/v/release/SamuelNDCE/plume?style=flat-square&color=4f46e5)](https://github.com/SamuelNDCE/plume/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4f46e5?style=flat-square)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-4f46e5?style=flat-square)
 ![No telemetry](https://img.shields.io/badge/telemetry-none-4f46e5?style=flat-square)
-[![Plugins welcome](https://img.shields.io/badge/plugins-welcome-4f46e5?style=flat-square)](docs/PLUGINS.md)
 
 <a href="https://github.com/SamuelNDCE/plume/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20%20Download%20Plume-for%20Windows%2C%20macOS%20%26%20Linux-4f46e5?style=for-the-badge" alt="Download Plume" height="44"></a>
 
-[Features](#features) &nbsp;·&nbsp; [Themes](#themes) &nbsp;·&nbsp; [Plugins](#for-developers-plugins-and-themes) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Safety](#is-it-safe)
+[What it is](#what-plume-is) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Build from source](#build-from-source) &nbsp;·&nbsp; [Security](#security) &nbsp;·&nbsp; [Changelog](#changelog)
 
 <br>
 
@@ -22,19 +21,123 @@
 
 </div>
 
-## Why Plume exists
+## What Plume is
 
-I wanted a good, free, open-source Markdown editor that looked and felt right to me, and I could not find one. The ones I liked were paid or closed, and the free ones were either clunky or only half-finished. So I made my own, and I am sharing it.
+Plume opens a file instantly and shows it the way it should look: Markdown as a finished page you type into, a CSV as a spreadsheet grid, a PDF with its page list, a log with its levels. It has no account, no telemetry and no subscription. Everything about how it looks can be changed, and anyone can write a theme or a plugin.
 
-Plume opens a file instantly, lets you write in rich text without ever seeing the syntax (or flip to the raw source in one keystroke), and reads the other files you work next to your notes: text, JSON, CSV, code and images. It has no account, no telemetry and no subscription. Everything about how it looks, from the fonts to how charts are drawn, can be changed, and anyone can write a theme or a plugin.
+## Screenshots
 
-## Download
+![Rich Markdown editing](docs/screenshots/plume-editor.webp)
 
-<div align="center">
+The rich editor. Headings, lists, tables, code and links look finished while you type.
 
-### [⬇ Get the latest Plume from Releases](https://github.com/SamuelNDCE/plume/releases/latest)
+![Source view with syntax highlighting](docs/screenshots/plume-source.webp)
 
-</div>
+The same document as highlighted source. Press **`Ctrl+/`** to flip between the two.
+
+![Light, Sepia, Dark and Midnight themes side by side](docs/screenshots/plume-themes.webp)
+
+Four of the eight built-in themes: Light, Sepia, Dark and Midnight.
+
+![The File menu beside the selection bar and its drop-down](docs/screenshots/plume-menus.webp)
+
+The File menu, and the selection bar that appears over selected text, with one of its drop-downs open.
+
+![CSV opened in the spreadsheet grid with find open](docs/screenshots/plume-spreadsheet.webp)
+
+A CSV file in the spreadsheet grid, with find and replace open.
+
+![A PDF with the page list and a highlight](docs/screenshots/plume-pdf.webp)
+
+A PDF with the page list down the left and a highlight on the page.
+
+![Log view with level counts](docs/screenshots/plume-logs.webp)
+
+A log file with level counts, filtering and collapsible stack traces.
+
+![Settings with the theme gallery](docs/screenshots/plume-settings.webp)
+
+The Settings page. Press **`Ctrl+,`** to open it.
+
+## Features
+
+### Markdown
+
+- Rich editing on ProseMirror, with a slash menu. Press **`Ctrl+/`** to flip to the raw source and back. Your edits carry across both.
+- Select text to get a one-row selection bar: block style (Paragraph, Title, Heading 2 to 6, Quote, Code block), Bold, Italic, Underline, Strikethrough, Code and a text size drop-down.
+- Right-click for the full menu. The selection bar sits on top of it, and the rows below are grouped as Clipboard, Link, Quote and lists, Find, and More.
+- Underline is stored as an HTML `<u>` tag, so it is refused for text that contains `<` or `>`.
+- Tables, task lists, footnotes, fenced code with highlighting and KaTeX math.
+- Mermaid diagrams, loaded only when a document uses one, and built-in `chart` blocks (bar, line, area, pie) from a few lines of JSON.
+- Paste or drop images. They are saved to an `assets/` folder beside the file.
+- Find and replace (`Ctrl+F`, `Ctrl+H`) with case, whole word and regex. Command palette (`Ctrl+P`). Focus, typewriter, reading, zen and presentation modes. Spellcheck, word count and reading time.
+- Export to self-contained HTML or PDF, print, or copy as Markdown or HTML.
+- Outline rail: a slim strip of lines down the left edge, one per heading. Click a line to jump to that heading.
+
+### Text and logs
+
+- Plain text, JSON, YAML, XML, HTML and code open with syntax highlighting and line numbers (CodeMirror 6).
+- Text opens and saves like Notepad. UTF-8, UTF-8 with BOM, UTF-16 and ANSI files open correctly. Encoding and line endings (CRLF, LF, CR) are kept exactly when you save, show in the status bar and can be changed there.
+- Ln and Col, **`Ctrl+G`** go to line, **`Ctrl+Shift+D`** date and time, reopen a file with another encoding.
+- Text files above 128 MiB open as a read-only preview of the first 5 MB and cannot be saved.
+- Log view for `.log`, `.out` and `.err` files, and for files whose first lines look like logs. It has level counts and filters, follow mode and collapsible stack traces.
+
+### Spreadsheets: CSV and Excel
+
+- **CSV and TSV** open in a spreadsheet grid. Edit cells in place with a formula bar, undo and redo, copy and paste to and from Excel, and fill down and right.
+- Formulas recalculate as you type: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `ROUND`, text functions and more. The CSV keeps the formula text.
+- Sort, filter by column, resize columns, freeze the header row, insert and delete rows and columns, and switch delimiter.
+- **`Ctrl+H`** opens find and replace for the selection or the whole sheet, with match case and whole cell options.
+- A CSV saves back as plain text, and a file you only looked at is never changed.
+- **Excel `.xlsx`** opens with sheet tabs, a cell value line and find. You can edit cells and save back to `.xlsx` with `Ctrl+S`.
+- Excel limits: **Save As is not yet tested.** Edits are lost if the app restarts before you save. Edits and paste stay inside the existing data range. For a file with a calc chain, the chain is removed on save. Legacy `.xls` and `.ods` are not supported.
+
+### PDF
+
+- Page list down the left, zoom, fit width and fit page, find (`Ctrl+F`), and text selection and copy.
+- Page keys: Down, Right and PageDown go to the next page and Up, Left and PageUp to the previous page when the page list has focus. Home and End go to the first and last page. Type a number to jump to that page, or press `Ctrl+G`. Press `F1` for the full list.
+- Rotate a page with **`Ctrl+Shift+R`**. The rotation is saved into the file when you save.
+- Print with **`Ctrl+P`** or the toolbar button.
+- Edit tools: highlight, underline, sticky note and freehand ink. Delete, move, rotate and extract pages, and merge another PDF onto the end. Fill in form fields (text, checkbox, radio, drop-down). Undo and redo cover every edit, and nothing is written until you save.
+- **Cover and retype** draws a white box over text and puts your new text on top. It does not edit the original text. The original text stays in the file under the white box.
+
+### Word
+
+- `.docx` files open in a viewer. **Word is read only.** The document is sanitised before it is shown.
+
+### Working with files
+
+- Open as many documents as you like. They sit in a left bar with folders, search and recent files.
+- Search a whole folder with **`Ctrl+Shift+F`**. It runs in a background thread, can be cancelled and stops at 200 hits.
+- Create, rename, trash and reveal files from the sidebar. Autosave, session restore, and automatic reload when a file changes on disk.
+- On Windows, Plume shows as Plume in Open with and in Settings, and a one-time bubble offers to open Plume's page in Windows Default apps.
+- Eight built-in themes, with fonts, sizes, widths and chart style in Settings. See [docs/THEMES.md](docs/THEMES.md) to write a theme and [docs/PLUGINS.md](docs/PLUGINS.md) to write a plugin.
+
+### Keyboard shortcuts
+
+| Keys | What it does |
+| --- | --- |
+| `Ctrl+O` / `Ctrl+Shift+O` | Open files / folder |
+| `Ctrl+N` | New document |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save / Save as |
+| `Ctrl+W` | Close document |
+| `Ctrl+/` | Rich / source view |
+| `Ctrl+P` | Command palette (prints, when a PDF is open) |
+| `Ctrl+F` / `Ctrl+H` | Find / replace |
+| `Ctrl+Shift+F` | Search folder |
+| `Ctrl+G` | Go to line, or go to page in a PDF |
+| `Ctrl+Shift+R` | Rotate the page in a PDF |
+| `Ctrl+Shift+D` | Insert date and time |
+| `Ctrl+,` | Settings |
+| `F5` | Presentation |
+| `F8` / `F9` | Focus / typewriter mode |
+| `Ctrl+=` `Ctrl+-` `Ctrl+0` | Font size |
+
+The full list is in Settings, under Shortcuts.
+
+## Install
+
+Download a build from [Releases](https://github.com/SamuelNDCE/plume/releases/latest).
 
 | System | Download |
 | --- | --- |
@@ -42,273 +145,58 @@ Plume opens a file instantly, lets you write in rich text without ever seeing th
 | **macOS** | `Plume-<version>-mac-arm64.dmg` |
 | **Linux** | `Plume-<version>-linux-x86_64.AppImage` or `Plume-<version>-linux-amd64.deb` |
 
-Updates are built in: when a new version is out, Plume tells you and you click once to install it (see [Updates](#updates)). Builds are not code-signed yet, so your system may show a warning the first time; see [Is it safe?](#is-it-safe).
-
-**First run.** Plume is not code-signed yet (signing is postponed, see [#1](https://github.com/SamuelNDCE/plume/issues/1)), so your system may warn you once:
+Plume is not code-signed yet (see [#1](https://github.com/SamuelNDCE/plume/issues/1)), so your system may warn you once:
 
 - **Windows:** on the blue "Windows protected your PC" screen, click **More info**, then **Run anyway**.
-- **macOS:** open **System Settings, Privacy & Security**, find the message about Plume under Security, click **Open Anyway** and enter your password. The button is available for about an hour after the first launch attempt.
-- **Linux:** no signing warning; mark the AppImage as executable first (`chmod +x`).
+- **macOS:** open **System Settings, Privacy & Security**, find the message about Plume, click **Open Anyway** and enter your password.
+- **Linux:** mark the AppImage as executable first (`chmod +x`).
 
-## See it
+Updates are built in. Plume checks GitHub for a newer release at startup and shows a card with **Update**. The Windows installer and the Linux AppImage update in place. macOS, the portable Windows exe and the Linux `.deb` open the download page. Turn the check off in Settings, Files, Updates, and Plume makes no network requests at all.
 
-<div align="center">
-<img src="docs/screenshots/plume-editor.webp" alt="Rich Markdown editing" width="880">
-<br><sub>Rich Markdown: headings, lists, tables, code and links, edited as you read them.</sub>
-<br><br>
-<img src="docs/screenshots/plume-source.webp" alt="Source view with syntax highlighting" width="880">
-<br><sub>One keystroke (<code>Ctrl+/</code>) flips between rich view and highlighted source.</sub>
-<br><br>
-<img src="docs/screenshots/plume-themes.webp" alt="Light, Sepia, Dark and Midnight themes side by side" width="880">
-<br><sub>Themes change the whole look. Shown: Light, Sepia, Dark and Midnight (eight are built in).</sub>
-<br><br>
-<img src="docs/screenshots/plume-menus.webp" alt="The File menu, and the selection bar with the right-click menu" width="880">
-<br><sub>The File menu, and the selection bar with the right-click menu over selected text.</sub>
-<br><br>
-<img src="docs/screenshots/plume-spreadsheet.webp" alt="CSV opened in the spreadsheet grid" width="880">
-<br><sub>CSV and TSV open in a spreadsheet grid with formulas, sorting and filters.</sub>
-<br><br>
-<img src="docs/screenshots/plume-pdf.webp" alt="A multi-page PDF with the page list" width="880">
-<br><sub>PDF viewer with the page list down the left.</sub>
-<br><br>
-<img src="docs/screenshots/plume-logs.webp" alt="Log view with level chips and a stack trace" width="880">
-<br><sub>Log view: level counts, filtering and collapsible stack traces.</sub>
-<br><br>
-<img src="docs/screenshots/plume-settings.webp" alt="Settings with the theme gallery" width="880">
-<br><sub>Pick a theme, change fonts, sizes, widths and chart style, or write your own CSS.</sub>
-</div>
+## Build from source
 
-## Features
-
-**Writing in Markdown**
-- Rich WYSIWYG editing on ProseMirror, with a slash menu and a selection toolbar
-- Rich view and raw source view, switch with `Ctrl+/`; edits carry across both
-- Tables, task lists, footnotes, fenced code with highlighting, KaTeX math
-- Mermaid diagrams (flowcharts, sequence, gantt and more), loaded only when a document uses one
-- Built-in `chart` blocks (bar, line, area, pie) from a few lines of JSON, styled by your theme
-- Paste or drop images; they are saved to an `assets/` folder beside the file
-
-**More than Markdown**
-- Plain text, JSON, YAML, XML, HTML and code, with syntax highlighting and line numbers (CodeMirror 6)
-- Opens and saves text like Notepad does: UTF-8, UTF-8 with BOM, UTF-16 and legacy ANSI files open correctly, and the encoding and line endings (CRLF, LF, CR) are kept exactly when you save. Both show in the status bar and can be changed there. Also Ln/Col, `Ctrl+G` go to line, `Ctrl+Shift+D` date and time, zoom with `Ctrl+scroll`
-- CSV and TSV open in a real spreadsheet grid that fills the whole pane, like Excel:
-  - Edit cells in place, with a formula bar, undo and redo, copy and paste to and from Excel, fill down and right
-  - Formulas that recalculate as you type: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `ROUND`, text functions and more (your CSV keeps the formula text, so it opens anywhere)
-  - Sort, filter by column, resize columns, freeze the header row, insert and delete rows and columns, switch delimiter (comma, semicolon, tab, pipe)
-  - Selection stats at a glance: count, sum, average, min and max
-  - Fast on big files: a 100,000-row CSV opens in about a fifth of a second
-  - Saves back as plain text, and a file you only looked at is never changed
-- Images with zoom, pan and fit
-- PDF viewer: read only, page controls, zoom, loaded only when you open a PDF
-- Word viewer (`.docx`): read only, the document is sanitised before it is shown
-- Excel viewer (`.xlsx`): read only for now, with sheet tabs, a cell value line and find. Editing and saving to `.xlsx` are not available yet. Legacy `.xls` and `.ods` are not supported
-  > Correction 2026-10-29 (later): the Excel viewer now edits cells and saves back to `.xlsx` (type, F2, Enter, Tab, Escape, Delete, Ctrl+Z, Ctrl+Y, Ctrl+X, Ctrl+V, Ctrl+S). Limits: Save As is not yet tested, edits are lost if the app restarts before you save, edits and paste stay inside the existing data range, and for a file with a calc chain the chain is removed on save (`xlsxworker.js`).
-- Log view for `.log`, `.out` and `.err` files, and for files whose first lines look like logs
-- Text file types Plume registers with the OS: `md`, `markdown`, `mdown`, `mkd`, `txt`, `log`, `out`, `err`, `csv`, `tsv`, `json`, `jsonl`, `yaml`, `yml`, `xml`, `toml`, `ini`, `cfg`, `conf`, `env`, `properties`, `sql`, `diff`, `patch`, `ps1`, `sh`, `bat`, `cmd`, `js`, `ts`, `py`, `html`, `css`, `gitignore`
-
-**Working with files**
-- Open as many documents as you like; they sit in a library list, no tab bar
-- Folder tree, recent files, search across a whole folder, and the outline rail (below)
-- Folder search runs in a background worker thread, streams results as it finds them, can be cancelled, and stops at 200 hits
-- Recent files list, with an x on each entry to hide it
-- Right-click menu and a quick bar above selected text (bold, italic, strikethrough, code, text size, block style, link)
-- On Windows, a one-time bubble offers to open Plume's page in Windows Default apps
-- Create, rename, trash and reveal files from the sidebar
-- Autosave, session restore, and automatic reload when a file changes on disk
-
-**The outline rail**
-- A slim strip of lines down the left edge of the document, one per heading, starting at the top
-- Length and thickness show the level: the thickest, longest line is a title, thinner and shorter lines are sub-sections
-- Click any line to jump straight to that heading; hover to see the heading names, with the section you are in highlighted
-- Shown only in rich view, so it never gets in the way of source code or tables
-
-**Reading and writing aids**
-- Find and replace with case, whole word and regex, in rich and source views
-- Command palette with fuzzy search, go-to-file and heading jump
-- Focus mode, typewriter mode, reading mode, zen mode, presentation mode (split on `---`)
-- Spellcheck, word count, reading time
-
-**Export**
-- Self-contained HTML, PDF, print, copy as Markdown or HTML
-
-## Themes
-
-Plume ships with exactly eight themes, chosen to be properly different from each other rather than eight shades of grey. A theme controls the whole look: colours, fonts, heading style, spacing, and how charts and diagrams are drawn.
-
-| Light | Dark |
-| --- | --- |
-| **Light**: clean, modern sans | **Dark**: neutral charcoal |
-| **GitHub**: the familiar README look | **Nord**: cool arctic blues |
-| **Newsprint**: newspaper serif, narrow column | **Dracula**: vivid purple, monospaced |
-| **Sepia**: warm book page, generous spacing | **Midnight**: deep navy, elegant serif |
-
-Beyond the eight, you can change fonts (body, headings, code), heading scale, paragraph spacing, accent colour and chart style in Settings, or paste your own CSS. Writing a whole new theme is a single JSON file: see [docs/THEMES.md](docs/THEMES.md).
-
-## Updates
-
-Plume checks GitHub for a newer release when it starts and shows a small card with **Update**. Click it and Plume shows one update screen with a progress bar, saves your open documents, restarts into the new version and reopens them. There is no installer wizard. You can also check any time under **Settings, About**.
-
-- **Windows installer and Linux AppImage:** download and install in place, one click.
-- **macOS, the portable Windows exe and the Linux `.deb`:** Plume tells you a new version exists and opens the download page.
-- Turn the startup check off in Settings, Files, Updates. With it off Plume makes no network requests at all.
-
-## Install
-
-Grab a build from [Releases](https://github.com/SamuelNDCE/plume/releases/latest) (table above), or build it yourself:
+You need [Node.js](https://nodejs.org) 20.19 or newer (or 22.12 or newer).
 
 ```bash
 git clone https://github.com/SamuelNDCE/plume.git
+```
+
+```bash
 cd plume
+```
+
+```bash
 npm install
+```
+
+```bash
 npm start
 ```
 
-Needs [Node.js](https://nodejs.org) 20.19 or newer (or 22.12 or newer). To make an installer for your system:
+To make an installer for your system, run `npm run dist`. Output goes to `release/`. To work on Plume itself, see [CONTRIBUTING.md](CONTRIBUTING.md) and [DESIGN.md](DESIGN.md).
 
-```bash
-npm run dist
-```
+## Security
 
-Output goes to `release/`.
+- No telemetry, no accounts, no ads. The only network request is the optional update check, which you can turn off.
+- The window is locked down: context isolation and the sandbox are on, and Node integration is off.
+- Plume only touches files you picked in a dialog, dropped on the window or opened with it, plus the folders you opened. Saves are atomic.
+- Plugins are off by default, and they are not sandboxed.
+- Release downloads ship with `SHA256SUMS.txt` and a build-provenance attestation.
 
-## Is it safe?
+Full details, and how to report a vulnerability privately: [SECURITY.md](SECURITY.md).
 
-Plume is small and does little by design.
+## Changelog
 
-- **No telemetry, no accounts, no ads.** The only network request Plume makes is the optional update check to GitHub, which you can turn off. (A document that links a remote `https` image will load it, like any viewer.)
-- **Locked-down window.** Context isolation and the renderer sandbox are on, Node integration is off, and a Content-Security-Policy blocks inline and remote scripts. The window reaches your disk only through a short list of named calls in [`electron/preload.cjs`](electron/preload.cjs).
-- **File access.** Plume only touches files you picked in a dialog, dropped on the window or opened with it, plus the folders you opened. Its own data folder and dotfiles under your home folder (such as `.ssh`) are refused. Details: [SECURITY.md](SECURITY.md).
-- **Links.** Only `http`, `https` and `mailto` links are ever handed to your system. One exception: on Windows, the optional default-app prompt and Settings button open the fixed page `ms-settings:defaultapps?registeredAppUser=Plume`, and nothing else. Windows does not let an app set itself as default, so you still click "Set default" on each file type in Settings.
-  > Correction 2026-10-29: this said `ms-settings:defaultapps` before; the fixed `?registeredAppUser=Plume` query was added so Settings opens Plume's own page.
-- **Plugins are off by default** and you are warned before enabling one. See the security note in [docs/PLUGINS.md](docs/PLUGINS.md).
-- **Open source.** Read it, build it, change it.
-
-**Verify a download.** Each release ships `SHA256SUMS.txt` and a signed build-provenance attestation made by the public GitHub Actions workflow, proving the file was built from this repository:
-
-```bash
-sha256sum -c SHA256SUMS.txt
-```
-
-```bash
-gh attestation verify Plume-<version>-win-x64-setup.exe --repo SamuelNDCE/plume
-```
-
-**Code signing.** Binaries are not yet signed with a Windows (Authenticode) or Apple certificate, which is why the OS may warn on first run. Use the checksum and attestation above, or build from source. Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
+Every release is listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## AI tools (MCP)
 
-An optional, separate MCP server lets AI tools such as Claude Desktop or Claude Code read your Markdown and text files. It is local stdio only, reads (and only with `--allow-write`, writes) files inside the one folder you give it on the command line, and makes no network calls. Plume itself is unchanged. Setup: [tools/plume-mcp/README.md](tools/plume-mcp/README.md).
-
-## For developers: plugins and themes
-
-Plume is built to be extended. There are two ways, and neither needs you to touch the core app.
-
-### Add menu items (no code)
-
-The menu button (top left) also lists entries from `commands.json` in Plume's data folder (`%APPDATA%\plume` on Windows). It is created with an example on first run and re-read each time the menu opens. Each entry has `id`, `label`, optional `shortcut` (shown only) and `action`: `command` (runs a built-in command id in `value`), `openFile` (asks you to pick a file) or `insertText` (inserts `value`). Anything else is skipped with one console warning.
-
-```json
-[{ "id": "zoom-reset", "label": "Back to normal size", "action": "command", "value": "view.zoomReset" }]
-```
-
-### Make a theme (no code)
-
-A theme is one JSON file dropped in the themes folder (Settings, Appearance, Open themes folder):
-
-```json
-{
-  "id": "my-theme",
-  "name": "My Theme",
-  "dark": false,
-  "vars": { "--bg": "#fdf6e3", "--fg": "#3b3b3b", "--accent": "#d33682" },
-  "typography": { "heading": "Georgia, serif", "lineHeight": 1.8, "width": 760 },
-  "chart": { "colors": ["#d33682", "#268bd2", "#2aa198", "#b58900"], "style": "smooth" }
-}
-```
-
-Colours, fonts, heading style, and how charts and Mermaid diagrams are drawn are all themeable. Full reference: [docs/THEMES.md](docs/THEMES.md), with three examples in [`examples/themes/`](examples/themes).
-
-### Make a plugin (a little JavaScript)
-
-A plugin is a folder with a `plugin.json` and an `index.js`:
-
-```js
-export function activate(api) {
-  api.commands.register({
-    id: 'hello',
-    title: 'Insert greeting',
-    run: () => api.editor.insertText('Hello from my plugin!'),
-  })
-
-  // Add your own fenced block type: ```timeline ... ```
-  api.blocks.register('timeline', (code) => renderMyTimeline(code))
-}
-```
-
-The API lets a plugin:
-
-| Can | How |
-| --- | --- |
-| Add commands and shortcuts | `api.commands.register` |
-| Read and change the open document | `api.editor.*` |
-| Render custom code blocks (diagrams, charts, embeds) | `api.blocks.register` |
-| Add themes | `api.themes.register` |
-| Add status-bar items and header buttons | `api.ui.*` |
-| Listen to app events (save, open, theme change) | `api.on` |
-| Keep its own settings | `api.storage` |
-
-Three working examples are in [`examples/plugins/`](examples/plugins): a daily word-goal counter, a timeline block renderer, and a snippet inserter. The full guide, manifest reference and security model are in [docs/PLUGINS.md](docs/PLUGINS.md).
-
-> Plugins are ordinary JavaScript running inside the app window, with access to your open documents. They are off until you enable them in Settings, and you should only enable plugins you trust.
-
-### Work on Plume itself
-
-```bash
-npm install
-npm run dev
-```
-
-Then, in another terminal, `VITE_DEV_URL=http://localhost:5199 npm run app` (PowerShell: `$env:VITE_DEV_URL='http://localhost:5199'; npm run app`).
-
-| Path | What |
-| --- | --- |
-| `electron/` | Main process, the preload bridge, the updater, plugin and theme loaders |
-| `src/main.js` | App core: documents, views, boot |
-| `src/modules/` | Features. Each exports `init(app)`; the contract is at the top of `src/app.js` |
-| `src/themes/` | Theme registry and the eight built-in themes |
-| `src/plugins.js` | Plugin loader and the plugin API |
-| `docs/` | Plugin guide, theme guide |
-| `DESIGN.md` | Design tokens and rules |
-
-Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Good places to start are a new theme, an example plugin, or any issue labelled `good first issue`.
-
-## Keyboard shortcuts
-
-| | |
-| --- | --- |
-| `Ctrl+O` / `Ctrl+Shift+O` | Open files / folder |
-| `Ctrl+N` | New document |
-| `Ctrl+S` / `Ctrl+Shift+S` | Save / Save as |
-| `Ctrl+W` | Close document |
-| `Ctrl+/` | Rich / source view |
-| `Ctrl+P` | Command palette |
-| `Ctrl+F` / `Ctrl+H` | Find / replace |
-| `Ctrl+Z` | Undo in source view |
-| `Ctrl+Shift+Z` / `Ctrl+Y` | Redo in source view |
-| `Ctrl+Shift+F` | Search folder |
-| `Ctrl+G` | Go to line (source view) |
-| `Ctrl+Shift+D` | Insert date and time |
-| `Ctrl+,` | Settings |
-| `F5` | Presentation |
-| `F8` / `F9` | Focus / typewriter mode |
-| `Ctrl+=` `Ctrl+-` `Ctrl+0` | Font size |
-
-The full, always-accurate list is in Settings, under Shortcuts.
+An optional, separate MCP server lets AI tools such as Claude Desktop or Claude Code read your Markdown and text files. It is local stdio only, reads (and only with `--allow-write`, writes) files inside the one folder you give it, and makes no network calls. Setup: [tools/plume-mcp/README.md](tools/plume-mcp/README.md).
 
 ## Built with
 
-[Electron](https://www.electronjs.org), [Milkdown](https://milkdown.dev) (ProseMirror), [CodeMirror 6](https://codemirror.net), [Mermaid](https://mermaid.js.org), [KaTeX](https://katex.org), [Vite](https://vite.dev).
+[Electron](https://www.electronjs.org), [Milkdown](https://milkdown.dev), [CodeMirror 6](https://codemirror.net), [pdf.js](https://mozilla.github.io/pdf.js/), [pdf-lib](https://pdf-lib.js.org), [Mermaid](https://mermaid.js.org), [KaTeX](https://katex.org), [Vite](https://vite.dev).
 
-## License
+## Licence
 
 [MIT](LICENSE). Free to use, change and share.

@@ -1,9 +1,11 @@
 // Document quick bar and right-click menu (Rich and Source views), one component.
-//   Select text: a slim icon bar floats above the selection (Bold, Italic, Strikethrough, Code, Smaller, Larger).
+//   Select text: a slim one-row bar floats below the selection. It is the ONE place for the common changes:
+//   block style, inline (Bold, Italic, Underline, Strikethrough, Code),
+//   and size (a drop-down of the text sizes). The block-style drop-down lists Paragraph, Title, Heading 2 to 6, Quote and Code block.
 //   It replaces Crepe's own selection toolbar (turned off in main.js).
-//   Right-click: the SAME bar expands in place into the full menu. The icon row stays on top, and the menu rows
-//   (Clipboard, Block style, Format, Text size, Insert) open below it; each opens a submenu on hover (short intent
-//   delay) or with the Right arrow. Left closes a submenu, Escape closes the menu.
+//   Right-click: the SAME bar expands in place into the menu. The bar row stays on top, and the menu rows
+//   (Clipboard, direct Link, Quote, Bullet list, Numbered list and Task list, an Edit group of Select all, Undo, Redo and Paste as plain text, Find, then Insert more and More edit) open below it; each submenu opens on hover (short intent
+//   delay) or with the Right arrow. Left closes a submenu, Escape closes the menu. Nothing the bar shows is repeated in the menu.
 // Rich view sends the same shortcuts Milkdown binds (checked in preset-commonmark and preset-gfm): Ctrl+B, Ctrl+I,
 // Ctrl+E, Ctrl+Alt+X, Ctrl+Alt+0..6, Ctrl+Alt+7/8, Ctrl+Alt+C, Ctrl+Shift+B. Task list, divider, link and clear
 // formatting have no Milkdown shortcut, so Rich view uses typed input rules (execCommand insertText) and
@@ -34,6 +36,7 @@ const PRESETS = [
 
 // 24x24 stroke icons, currentColor. Static strings written here, never user input.
 const P = {
+  underline: 'M7 4v7a5 5 0 0 0 10 0V4M5 20h14',
   bold: 'M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z',
   italic: 'M19 4h-9M14 20H5M15 4 9 20',
   strike: 'M16 6.5A4 4 0 0 0 12 4.5c-2.4 0-4 1.2-4 3 0 3.8 8 2.2 8 6.5 0 1.9-1.8 3.2-4 3.2a4.6 4.6 0 0 1-4.4-2.6M4 12h16',
@@ -70,6 +73,7 @@ const P = {
   up: 'M12 19V5M6 11l6-6 6 6',
   down: 'M12 5v14M6 13l6 6 6-6',
   replace: 'M4 7h12l-3-3M20 17H8l3 3',
+  chevron: 'm6 9 6 6 6-6',
 }
 const iconSvg = (name) =>
   `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"${name === 'selectall' ? ' stroke-dasharray="3 3"' : ''}><path d="${P[name]}"/></svg>`
@@ -118,11 +122,34 @@ export function init(app) {
     v.focus()
   }
 
-  function sourceWrap(marker) {
+  // Is the selection exactly wrapped by open...close? A lone '*' must not match the pair inside '**'.
+  function sourceWrapped(open, close = open) {
     const v = app.code.view
     const r = v.state.selection.main
+    if (r.empty) return false
+    const d = v.state.doc
+    const before = d.sliceString(Math.max(0, r.from - open.length), r.from)
+    const after = d.sliceString(r.to, Math.min(d.length, r.to + close.length))
+    if (before !== open || after !== close) return false
+    if (open === '*') {
+      const b2 = d.sliceString(Math.max(0, r.from - 2), Math.max(0, r.from - 1))
+      const a2 = d.sliceString(Math.min(d.length, r.to + 1), Math.min(d.length, r.to + 2))
+      if (b2 === '*' || a2 === '*') return false
+    }
+    return true
+  }
+
+  // Wrap the selection with a marker, or take the marker off when it is already there.
+  function sourceWrap(open, close = open) {
+    const v = app.code.view
+    const r = v.state.selection.main
+    if (sourceWrapped(open, close)) {
+      const inner = v.state.sliceDoc(r.from, r.to)
+      v.dispatch({ changes: { from: r.from - open.length, to: r.to + close.length, insert: inner }, selection: { anchor: r.from - open.length, head: r.from - open.length + inner.length } })
+      return v.focus()
+    }
     const inner = v.state.sliceDoc(r.from, r.to)
-    v.dispatch({ changes: { from: r.from, to: r.to, insert: marker + inner + marker }, selection: { anchor: r.from + marker.length, head: r.from + marker.length + inner.length } })
+    v.dispatch({ changes: { from: r.from, to: r.to, insert: open + inner + close }, selection: { anchor: r.from + open.length, head: r.from + open.length + inner.length } })
     v.focus()
   }
 
@@ -239,6 +266,105 @@ export function init(app) {
       }
       if (!did) break
     }
+  }
+
+  // Markdown has no underline and Milkdown has no underline mark. Rich view stores it as the inline HTML <u>text</u>
+  // (Milkdown's own inline "html" node), so the file holds <u>...</u> and renders underlined.
+  // The <u> html node the selection sits in or covers (a ProseMirror node selection puts the range around the node).
+  const isU = (sp) => /^<u>[\s\S]*<\/u>$/.test(sp.dataset.value || '')
+  const htmlSpan = () => {
+    const s = document.getSelection()
+    const p = pm()
+    if (!p || !s.rangeCount) return null
+    const rg = s.getRangeAt(0)
+    const e = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement)
+    const own = e && e.closest('span[data-type="html"]')
+    if (own && isU(own)) return own
+    for (const sp of p.querySelectorAll('span[data-type="html"]')) {
+      if (!isU(sp) || !rg.intersectsNode(sp)) continue
+      const nr = document.createRange()
+      nr.selectNode(sp)
+      if (rg.compareBoundaryPoints(Range.START_TO_START, nr) <= 0 && rg.compareBoundaryPoints(Range.END_TO_END, nr) >= 0) return sp
+    }
+    return null
+  }
+  function richUnderline() {
+    const s = document.getSelection()
+    if (!s.rangeCount || s.isCollapsed) return
+    const sp = htmlSpan()
+    if (sp) {
+      const inner = sp.dataset.value.slice(3, -4)
+      const rg = document.createRange()
+      rg.selectNode(sp)
+      s.removeAllRanges()
+      s.addRange(rg)
+      return void document.execCommand('insertText', false, inner)
+    }
+    const attr = (t) => t.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // The value is written as raw HTML into the document, so text with < or > could become live markup. Refuse those.
+    const picked = s.toString()
+    if (/[<>]/.test(picked)) return void app.toast("Underline can't include < or > characters")
+    const value = '<u>' + picked + '</u>'
+    // A paste of the html node keeps it inline in the paragraph (execCommand insertHTML would split the paragraph).
+    const dt = new DataTransfer()
+    dt.setData('text/html', '<span data-type="html" data-value="' + attr(value) + '"></span>')
+    pm().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  }
+
+  // Milkdown draws its html node as the literal tags. Show the <u>text</u> nodes as underlined text instead (display only:
+  // the node and the saved Markdown are unchanged, and ProseMirror ignores edits inside a non-editable node).
+  function decorateUnderline() {
+    for (const sp of docEl.querySelectorAll('span[data-type="html"]')) {
+      const m = /^<u>([\s\S]*)<\/u>$/.exec(sp.dataset.value || '')
+      if (m && sp.dataset.pl !== m[1]) {
+        sp.dataset.pl = m[1]
+        sp.textContent = m[1]
+        sp.classList.add('ctx-u')
+      }
+    }
+  }
+  new MutationObserver(decorateUnderline).observe(docEl, { childList: true, subtree: true })
+
+  // What the bar highlights: the block style of the line, and which inline marks the selection carries.
+  function barState() {
+    const st = { block: null, codeblock: false, quote: false, bullets: false, numbers: false, task: false, bold: false, italic: false, underline: false, strike: false, code: false }
+    if (rich()) {
+      const s = document.getSelection()
+      const p = pm()
+      const n0 = s.rangeCount && s.anchorNode
+      const n = n0 && (n0.nodeType === 1 ? n0 : n0.parentElement)
+      if (!p || !n || !p.contains(n)) return st
+      const h = n.closest('h1,h2,h3,h4,h5,h6')
+      if (h && p.contains(h)) st.block = Number(h.tagName[1])
+      else if (n.closest('p') || n.closest('li')) st.block = 0
+      st.quote = !!n.closest('blockquote')
+      st.codeblock = !!n.closest('pre')
+      const li = n.closest('li')
+      st.task = !!(li && li.dataset.itemType === 'task')
+      st.bullets = !!(li && !st.task && li.parentElement && li.parentElement.tagName === 'UL')
+      st.numbers = !!(li && li.parentElement && li.parentElement.tagName === 'OL')
+      st.bold = richHas('strong,b')
+      st.italic = richHas('em,i')
+      st.strike = richHas('del,s,strike')
+      st.code = richHas('code')
+      st.underline = !!htmlSpan() || richHas('u')
+      return st
+    }
+    const v = app.code && app.code.view
+    if (!v) return st
+    const line = v.state.doc.lineAt(v.state.selection.main.head).text
+    const m = /^(#{1,6})[ \t]/.exec(line)
+    st.block = m ? m[1].length : 0
+    st.quote = /^>/.test(line)
+    st.task = /^[-*+][ \t]+\[[ xX]\]/.test(line)
+    st.bullets = !st.task && /^[-*+][ \t]/.test(line)
+    st.numbers = /^\d+\.[ \t]/.test(line)
+    st.bold = sourceWrapped('**')
+    st.italic = sourceWrapped('*') || sourceWrapped('_')
+    st.underline = sourceWrapped('<u>', '</u>')
+    st.strike = sourceWrapped('~~')
+    st.code = sourceWrapped('`')
+    return st
   }
 
   function safeUrl(u) {
@@ -368,6 +494,8 @@ export function init(app) {
         return r ? richKey('b') : sourceWrap('**')
       case 'italic':
         return r ? richKey('i') : sourceWrap('*')
+      case 'underline':
+        return r ? richUnderline() : sourceWrap('<u>', '</u>')
       case 'strike':
         return r ? richKey('x', { alt: true }) : sourceWrap('~~')
       case 'code':
@@ -429,14 +557,39 @@ export function init(app) {
 
   /* ---------- the bar: icon row + collapsible menu body ---------- */
   const QUICK = [
-    { icon: 'bold', label: 'Bold', kbd: 'Ctrl+B', action: 'bold' },
-    { icon: 'italic', label: 'Italic', kbd: 'Ctrl+I', action: 'italic' },
-    { icon: 'strike', label: 'Strikethrough', kbd: 'Ctrl+Alt+X', action: 'strike' },
-    { icon: 'code', label: 'Code', kbd: 'Ctrl+E', action: 'code' },
+    { block: true },
+    { icon: 'bold', label: 'Bold', kbd: 'Ctrl+B', action: 'bold', st: 'bold' },
+    { icon: 'italic', label: 'Italic', kbd: 'Ctrl+I', action: 'italic', st: 'italic' },
+    { icon: 'underline', label: 'Underline', action: 'underline', st: 'underline' },
+    { icon: 'strike', label: 'Strikethrough', kbd: 'Ctrl+Alt+X', action: 'strike', st: 'strike' },
+    { icon: 'code', label: 'Code', kbd: 'Ctrl+E', action: 'code', st: 'code' },
     { sep: true },
-    { icon: 'smaller', label: 'Smaller text', kbd: 'Ctrl+-', action: 'smaller', keep: true },
-    { icon: 'larger', label: 'Larger text', kbd: 'Ctrl++', action: 'larger', keep: true },
+    { size: true },
   ]
+  const BLOCKS = [
+    { label: 'Paragraph', action: 'body', key: 0, kbd: 'Ctrl+Alt+0' },
+    { label: 'Title', action: 'title', key: 1, kbd: 'Ctrl+Alt+1' },
+    { label: 'Heading 2', action: 'h2', key: 2, kbd: 'Ctrl+Alt+2' },
+    { label: 'Heading 3', action: 'h3', key: 3, kbd: 'Ctrl+Alt+3' },
+    { label: 'Heading 4', action: 'h4', key: 4, kbd: 'Ctrl+Alt+4' },
+    { label: 'Heading 5', action: 'h5', key: 5, kbd: 'Ctrl+Alt+5' },
+    { label: 'Heading 6', action: 'h6', key: 6, kbd: 'Ctrl+Alt+6' },
+    { label: 'Quote', action: 'quote', key: 'quote', kbd: 'Ctrl+Shift+B' },
+    { label: 'Code block', action: 'codeblock', key: 'code', kbd: 'Ctrl+Alt+C' },
+  ]
+  // The block name shown on the trigger: the standard styles by number, anything else by what the line is.
+  function blockName(st) {
+    if (st.codeblock) return 'Code block'
+    if (st.task) return 'Task list'
+    if (st.bullets) return 'Bullet list'
+    if (st.numbers) return 'Numbered list'
+    if (st.quote) return 'Quote'
+    if (!st.block) return 'Paragraph'
+    if (st.block === 1) return 'Title'
+    return 'Heading ' + st.block
+  }
+  // Which BLOCKS row is current: a code block or quote by name, a list has no row (it gets its own), else the heading level.
+  const blockKeyOf = (st) => (st.codeblock ? 'code' : st.task || st.bullets || st.numbers ? null : st.quote ? 'quote' : st.block || 0)
   const bar = el('div', 'qbar')
   bar.id = 'qbar'
   bar.hidden = true
@@ -454,29 +607,167 @@ export function init(app) {
   bar.append(row, body)
   document.body.appendChild(bar)
 
+  /* ---------- compact drop-down: one family for the block style and the size ---------- */
+  let dd = null // the open drop-down: { trigger, panel }
+  function closeDd(refocus = false) {
+    if (!dd) return
+    const t = dd.trigger
+    dd.panel.remove()
+    t.setAttribute('aria-expanded', 'false')
+    t.classList.remove('open')
+    dd = null
+    if (refocus) t.focus()
+  }
+  function makeDropdown(cls, name, tip, fill, onPick) {
+    const t = el('button', 'qb-dd ' + cls)
+    t.type = 'button'
+    t.tabIndex = -1
+    t.title = tip
+    t.setAttribute('aria-label', name)
+    t.setAttribute('aria-haspopup', 'listbox')
+    t.setAttribute('aria-expanded', 'false')
+    const lab = el('span', 'qb-dd-label')
+    const chev = icon('chevron')
+    chev.classList.add('qb-dd-chev')
+    t.append(lab, chev)
+    t.addEventListener('mousedown', (e) => e.preventDefault())
+    const open = (viaKey) => {
+      if (dd && dd.trigger === t) return closeDd()
+      closeDd()
+      closeSubs()
+      const panel = el('div', 'ctx-menu ctx-dd ' + cls + '-panel')
+      panel.setAttribute('role', 'listbox')
+      panel.setAttribute('aria-label', name)
+      const rows = []
+      const setRow = (b, focus = true) => {
+        for (const r of rows) r.classList.toggle('active', r === b)
+        if (focus) b.focus()
+      }
+      for (const it of fill()) {
+        const b = el('button', 'ctx-item ctx-dd-item' + (it.on ? ' ctx-on' : ''))
+        b.type = 'button'
+        b.tabIndex = -1
+        b.setAttribute('role', 'option')
+        b.setAttribute('aria-selected', it.on ? 'true' : 'false')
+        const ck = icon('check')
+        ck.classList.add('ctx-dd-check')
+        if (!it.on) ck.classList.add('ctx-dd-off')
+        b.append(ck, el('span', 'ctx-label', it.label))
+        if (it.kbd) b.appendChild(el('kbd', null, it.kbd))
+        b.addEventListener('mousedown', (e) => e.preventDefault())
+        b.addEventListener('mouseenter', () => setRow(b, false))
+        b.addEventListener('click', () => {
+          closeDd()
+          onPick(it)
+        })
+        panel.appendChild(b)
+        rows.push(b)
+      }
+      root.appendChild(panel)
+      t.setAttribute('aria-expanded', 'true')
+      t.classList.add('open')
+      const tr = t.getBoundingClientRect()
+      const pr = panel.getBoundingClientRect()
+      const below = tr.bottom + 4 + pr.height <= window.innerHeight - 8
+      panel.style.left = Math.max(8, Math.min(tr.left, window.innerWidth - pr.width - 8)) + 'px'
+      panel.style.top = Math.max(8, below ? tr.bottom + 4 : tr.top - 4 - pr.height) + 'px'
+      panel.style.transformOrigin = below ? 'top left' : 'bottom left'
+      const cur = rows.find((r) => r.classList.contains('ctx-on')) || rows[0]
+      panel.addEventListener('keydown', (e) => {
+        const at = rows.indexOf(document.activeElement)
+        const go = (i) => setRow(rows[(i + rows.length) % rows.length])
+        if (e.key === 'ArrowDown') go(at + 1)
+        else if (e.key === 'ArrowUp') go(at < 0 ? rows.length - 1 : at - 1)
+        else if (e.key === 'Home') go(0)
+        else if (e.key === 'End') go(rows.length - 1)
+        else if (e.key === 'Enter' || e.key === ' ') rows[at] && rows[at].click()
+        else if (e.key === 'Escape' || e.key === 'Tab') closeDd(true)
+        else return
+        e.preventDefault()
+        e.stopPropagation()
+      })
+      dd = { trigger: t, panel }
+      setRow(cur, viaKey !== false)
+    }
+    t.addEventListener('click', (e) => open(e.detail === 0))
+    t.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && dd && dd.trigger === t) {
+        e.preventDefault()
+        e.stopPropagation()
+        closeDd(true)
+      } else if (e.key === 'ArrowDown' && !(dd && dd.trigger === t)) {
+        e.preventDefault()
+        e.stopPropagation()
+        open(true)
+      }
+    })
+    return { t, lab }
+  }
+
   const barBtns = []
+  let blockDd = null
+  let sizeDd = null
+  const afterPick = () => {
+    if (expanded) hideAll()
+    else setTimeout(updateBar, 30)
+  }
   for (const q of QUICK) {
     if (q.sep) {
       row.appendChild(el('span', 'qb-sep'))
+      continue
+    }
+    if (q.block) {
+      blockDd = makeDropdown('qb-block', 'Block style', 'Block style', () => {
+        const st = barState()
+        const cur = blockKeyOf(st)
+        const rows = BLOCKS.map((b) => ({ ...b, on: b.key === cur }))
+        if (cur === null) rows.push({ label: blockName(st), action: null, on: true })
+        return rows
+      }, (it) => {
+        focusEditor()
+        if (!it.action || it.on) return
+        run(it.action)
+        afterPick()
+      })
+      blockDd.t.dataset.action = 'block'
+      barBtns.push(blockDd.t)
+      row.appendChild(blockDd.t)
+      continue
+    }
+    if (q.size) {
+      sizeDd = makeDropdown('qb-size', 'Text size', 'Text size in px', () => {
+        const size = app.settings.get('fontSize')
+        const rows = PRESETS.map(([, px]) => ({ label: String(px), px, on: px === size }))
+        if (!rows.some((r) => r.on)) rows.push({ label: String(size), px: size, on: true })
+        return rows
+      }, (it) => {
+        focusEditor()
+        setSize(it.px)
+        syncSizeButtons()
+        refreshSizePanel()
+        if (expanded) hideAll()
+      })
+      sizeDd.t.dataset.action = 'sizeset'
+      barBtns.push(sizeDd.t)
+      row.appendChild(sizeDd.t)
       continue
     }
     const b = el('button', 'qb-btn')
     b.type = 'button'
     b.tabIndex = -1
     b.dataset.action = q.action
-    b.title = `${q.label} (${q.kbd})`
+    if (q.st) b.dataset.st = q.st
+    b.title = q.kbd ? `${q.label} (${q.kbd})` : q.label
     b.setAttribute('aria-label', q.label)
     b.appendChild(icon(q.icon))
+    if (q.st) b.setAttribute('aria-pressed', 'false')
     b.addEventListener('mousedown', (e) => e.preventDefault()) // keep the editor selection
     b.addEventListener('click', () => {
+      closeDd()
       const wasExpanded = expanded
-      if (wasExpanded && !q.keep) hideAll()
+      if (wasExpanded) hideAll()
       run(q.action)
       if (!wasExpanded) setTimeout(updateBar, 30)
-      else if (q.keep) {
-        syncSizeButtons()
-        refreshSizePanel()
-      }
     })
     b.addEventListener('mouseenter', () => expanded && closeSubsSoon())
     barBtns.push(b)
@@ -484,10 +775,19 @@ export function init(app) {
   }
 
   function syncSizeButtons() {
-    const size = app.settings.get('fontSize')
+    if (sizeDd) sizeDd.lab.textContent = String(app.settings.get('fontSize'))
+  }
+
+  // Highlight the block style, inline marks and list type that apply to the selection.
+  function syncState() {
+    const st = barState()
+    if (blockDd) blockDd.lab.textContent = blockName(st)
     for (const b of barBtns) {
-      if (b.dataset.action === 'smaller') b.disabled = size <= SIZE_MIN
-      if (b.dataset.action === 'larger') b.disabled = size >= SIZE_MAX
+      const key = b.dataset.st
+      if (!key) continue
+      const on = !!st[key]
+      b.classList.toggle('on', on)
+      b.setAttribute('aria-pressed', on ? 'true' : 'false')
     }
   }
 
@@ -521,6 +821,8 @@ export function init(app) {
 
   function hideBar() {
     if (expanded) return
+    closeDd()
+    closeSubs()
     bar.hidden = true
     bar.classList.remove('open')
     if (barActive >= 0) barBtns[barActive].classList.remove('active')
@@ -529,6 +831,9 @@ export function init(app) {
 
   function updateBar() {
     if (expanded) return
+    // focus is inside the bar (its size select) or its link box: leave it where it is
+    const ae = document.activeElement
+    if (!bar.hidden && ae && (bar.contains(ae) || root.contains(ae))) return syncState()
     if (quiet || mouseDown || !editable()) return hideBar()
     const r = selectionRect()
     if (!r) {
@@ -554,7 +859,9 @@ export function init(app) {
       bar.classList.add('open')
     }
     syncSizeButtons()
-    if (!bar.contains(document.activeElement)) captureRestore()
+    syncState()
+    const ae2 = document.activeElement
+    if (!bar.contains(ae2) && !root.contains(ae2)) captureRestore()
   }
 
   let timerBar = 0
@@ -580,6 +887,10 @@ export function init(app) {
     scheduleBar()
   })
   document.addEventListener('mousedown', (e) => {
+    // a click or right-click anywhere outside the open bar drop-down (and its own trigger) closes it
+    if (dd && !dd.panel.contains(e.target) && !dd.trigger.contains(e.target)) closeDd()
+  }, true)
+  document.addEventListener('mousedown', (e) => {
     if (bar.hidden || bar.contains(e.target) || root.contains(e.target) || docEl.contains(e.target)) return
     hideAll()
     hideBar()
@@ -595,176 +906,76 @@ export function init(app) {
   // Grouped by what the user does, each group with a small heading and about six rows at most.
   // Copy and Paste are single clicks. Only items the app really supports are listed.
   // Source view edits plain text: only items that insert Markdown syntax or edit text, no block or mark commands.
-  function sourceModel(level, clip) {
-    const md = [
-      { label: 'Bold', icon: 'bold', kbd: 'Ctrl+B', action: 'bold' },
-      { label: 'Italic', icon: 'italic', kbd: 'Ctrl+I', action: 'italic' },
-      { label: 'Heading 1', badge: 'H1', action: 'title' },
-      { label: 'Heading 2', badge: 'H2', action: 'h2' },
-      { label: 'Heading 3', badge: 'H3', action: 'h3' },
-      { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
-      { label: 'Table', icon: 'table', action: 'table' },
-      { label: 'Code block', icon: 'codeblock', action: 'codeblock' },
-      { label: 'List item', icon: 'bullets', action: 'bullets' },
-      { label: 'Quote', icon: 'quote', action: 'quote' },
-    ]
+  function sourceModel(level, clip, direct, editGroup) {
+    // Block style (headings, quote, code block), inline marks and size live in the bar. Link, quote and the lists are direct rows.
     const line = [
       { label: 'Select line', icon: 'line', action: 'selectLine' },
       { label: 'Duplicate line', icon: 'dup', action: 'dupLine' },
       { label: 'Move line up', icon: 'up', action: 'lineUp' },
       { label: 'Move line down', icon: 'down', action: 'lineDown' },
     ]
-    const edit = [
-      { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
-      { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
-      { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
-      { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
-      { label: 'Word count', icon: 'count', action: 'wordcount' },
-    ]
+    const table = { label: 'Table', icon: 'table', action: 'table' }
     const find = [{ label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }, { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' }]
-    if (level >= 2) {
-      return [{ head: 'Menu', noHead: true, items: [{ label: 'Clipboard', icon: 'paste', sub: clip }, { label: 'Markdown', icon: 'format', sub: md }, { label: 'More', icon: 'insert', sub: [...find, { sep: true }, ...line, { sep: true }, ...edit] }] }]
+    const wc = { label: 'Word count', icon: 'count', action: 'wordcount' }
+    if (level >= 1) {
+      return [
+        { head: 'Clipboard', noHead: true, items: level >= 2 ? [{ label: 'Clipboard', icon: 'paste', sub: clip }] : clip },
+        { head: 'Insert', noHead: true, items: direct },
+        { head: 'Edit', noHead: true, items: editGroup },
+        { head: 'Menu', noHead: true, items: [find[0], { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], wc, { sep: true }, ...line] }] },
+      ]
     }
     return [
-      { head: 'Clipboard', noHead: level >= 1, items: clip },
-      { head: 'Find', noHead: true, items: [find[0], { label: 'Markdown', icon: 'format', sub: md }, { label: 'Line', icon: 'line', sub: line }, { label: 'More', icon: 'insert', sub: [find[1], { sep: true }, ...edit] }] },
+      { head: 'Clipboard', items: clip },
+      { head: 'Insert', items: direct },
+      { head: 'Edit', items: editGroup },
+      { head: 'Menu', noHead: true, items: [find[0], { label: 'Line', icon: 'line', sub: line }, { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], wc] }] },
     ]
   }
 
   function menuModel(level = 0) {
     const src = !rich()
-    const heads = [
-      { label: 'Title', badge: 'H1', kbd: 'Ctrl+Alt+1', action: 'title', sample: { scale: 1.6, weight: 700 } },
-      { label: 'Heading 2', badge: 'H2', kbd: 'Ctrl+Alt+2', action: 'h2', sample: { scale: 1.3, weight: 650 } },
-      { label: 'Heading 3', badge: 'H3', kbd: 'Ctrl+Alt+3', action: 'h3', sample: { scale: 1.1, weight: 650 } },
-      { label: 'Heading 4', badge: 'H4', kbd: 'Ctrl+Alt+4', action: 'h4', sample: { scale: 1, weight: 650 } },
-      { label: 'Heading 5', badge: 'H5', kbd: 'Ctrl+Alt+5', action: 'h5', sample: { scale: 0.95, weight: 650 } },
-      { label: 'Heading 6', badge: 'H6', kbd: 'Ctrl+Alt+6', action: 'h6', sample: { scale: 0.85, weight: 650 } },
-      { sep: true },
-      { label: 'Body text', badge: 'P', kbd: 'Ctrl+Alt+0', action: 'body' },
+    // Block style, inline marks and size live in the quick bar. Link, quote and the lists are direct rows here (none is on the bar).
+    const direct = [
+      { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
       { label: 'Quote', icon: 'quote', kbd: 'Ctrl+Shift+B', action: 'quote' },
       { label: 'Bullet list', icon: 'bullets', kbd: 'Ctrl+Alt+8', action: 'bullets' },
       { label: 'Numbered list', icon: 'numbers', kbd: 'Ctrl+Alt+7', action: 'numbers' },
       { label: 'Task list', icon: 'task', action: 'task' },
-      { label: 'Code block', icon: 'codeblock', kbd: 'Ctrl+Alt+C', action: 'codeblock' },
     ]
-    const more = (full) => {
-      const insert = [
-        { label: 'Table', icon: 'table', action: 'table' },
-        { label: 'Date and time', icon: 'calendar', kbd: 'Ctrl+Shift+D', action: 'datetime' },
-        { label: 'Divider', icon: 'divider', action: 'divider' },
-      ]
-      const format = [
-        { label: 'Strikethrough', icon: 'strike', kbd: 'Ctrl+Alt+X', action: 'strike' },
-        { label: 'Inline code', icon: 'code', kbd: 'Ctrl+E', action: 'code' },
-        { label: 'Clear formatting', icon: 'clear', action: 'clear' },
-      ]
-      const edit = [
-        { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
-        ...(src
-          ? [
-              { label: 'Select line', icon: 'line', action: 'selectLine' },
-              { label: 'Duplicate line', icon: 'dup', action: 'dupLine' },
-              { label: 'Move line up', icon: 'up', action: 'lineUp' },
-              { label: 'Move line down', icon: 'down', action: 'lineDown' },
-            ]
-          : []),
-        { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
-        { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
-        { sep: true },
-        { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
-        { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' },
-        { label: 'Word count', icon: 'count', action: 'wordcount' },
-      ]
-      return full
-        ? [{ label: 'Insert', icon: 'insert', sub: insert }, { label: 'Format', icon: 'format', sub: format }, { label: 'Edit', icon: 'selectall', sub: edit }]
-        : [{ label: 'More', icon: 'insert', sub: [...insert, { sep: true }, ...format, { sep: true }, ...edit] }]
-    }
+    const more = [
+      { label: 'Table', icon: 'table', action: 'table' },
+      { label: 'Date and time', icon: 'calendar', kbd: 'Ctrl+Shift+D', action: 'datetime' },
+      { label: 'Divider', icon: 'divider', action: 'divider' },
+    ]
+    // The Edit group: four quick rows. Everything else that edits sits under a More row, once.
+    const editGroup = [
+      { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
+      { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
+      { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
+      { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
+    ]
+    const editMore = [
+      { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' },
+      { label: 'Word count', icon: 'count', action: 'wordcount' },
+      { label: 'Clear formatting', icon: 'clear', action: 'clear' },
+    ]
     const clip = [{ label: 'Cut', icon: 'cut', kbd: 'Ctrl+X', action: 'cut' }, { label: 'Copy', icon: 'copy', kbd: 'Ctrl+C', action: 'copy' }, { label: 'Paste', icon: 'paste', kbd: 'Ctrl+V', action: 'paste' }]
-    if (src) return sourceModel(level, clip)
-    if (level >= 3) {
-      const m = more(false)[0]
-      const extra = level >= 4 ? [{ label: 'Link', icon: 'link', action: 'link', custom: 'link' }, { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }] : []
-      return [{ head: 'Menu', noHead: true, items: [{ label: 'Clipboard', icon: 'paste', sub: clip }, { label: 'Title', icon: 'block', sub: heads }, ...(level >= 4 ? [] : [{ label: 'Link', icon: 'link', action: 'link', custom: 'link' }, { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }]), { ...m, sub: [...extra, ...(extra.length ? [{ sep: true }] : []), ...m.sub] }] }]
-    }
+    const find = { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }
+    if (src) return sourceModel(level, clip, direct, editGroup)
     if (level >= 1) {
       return [
-        { head: 'Clipboard', items: [{ label: 'Cut', icon: 'cut', kbd: 'Ctrl+X', action: 'cut' }, { label: 'Copy', icon: 'copy', kbd: 'Ctrl+C', action: 'copy' }, { label: 'Paste', icon: 'paste', kbd: 'Ctrl+V', action: 'paste' }] },
-        {
-          head: 'Text',
-          items: [
-            ...(level === 1 ? [{ label: 'Bold', icon: 'bold', kbd: 'Ctrl+B', action: 'bold' }, { label: 'Italic', icon: 'italic', kbd: 'Ctrl+I', action: 'italic' }] : []),
-            { label: 'Title', icon: 'block', sub: heads },
-          ],
-        },
-        { head: 'Add', items: [{ label: 'Link', icon: 'link', action: 'link', custom: 'link' }, { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }, ...more(false)] },
-      ].map((g) => ({ ...g, noHead: true }))
+        { head: 'Clipboard', noHead: true, items: level >= 2 ? [{ label: 'Clipboard', icon: 'paste', sub: clip }] : clip },
+        { head: 'Insert', noHead: true, items: direct },
+        { head: 'Edit', noHead: true, items: editGroup },
+        { head: 'Menu', noHead: true, items: [find, { label: 'More', icon: 'insert', sub: [...more, { sep: true }, ...editMore] }] },
+      ]
     }
     return [
-      {
-        head: 'Clipboard',
-        items: [
-          { label: 'Cut', icon: 'cut', kbd: 'Ctrl+X', action: 'cut' },
-          { label: 'Copy', icon: 'copy', kbd: 'Ctrl+C', action: 'copy' },
-          { label: 'Paste', icon: 'paste', kbd: 'Ctrl+V', action: 'paste' },
-        ],
-      },
-      {
-        head: 'Text',
-        items: [
-          { label: 'Bold', icon: 'bold', kbd: 'Ctrl+B', action: 'bold' },
-          { label: 'Italic', icon: 'italic', kbd: 'Ctrl+I', action: 'italic' },
-          { label: 'Title', icon: 'block', sub: heads },
-        ],
-      },
-      {
-        head: 'Add',
-        items: [
-          { label: 'Link', icon: 'link', action: 'link', custom: 'link' },
-          { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' },
-        ],
-      },
-      {
-        head: 'More',
-        items: [
-          {
-            label: 'Insert', icon: 'insert',
-            sub: [
-              { label: 'Table', icon: 'table', action: 'table' },
-              { label: 'Date and time', icon: 'calendar', kbd: 'Ctrl+Shift+D', action: 'datetime' },
-              { label: 'Divider', icon: 'divider', action: 'divider' },
-            ],
-          },
-          {
-            label: 'Format', icon: 'format',
-            sub: [
-              { label: 'Strikethrough', icon: 'strike', kbd: 'Ctrl+Alt+X', action: 'strike' },
-              { label: 'Inline code', icon: 'code', kbd: 'Ctrl+E', action: 'code' },
-              { label: 'Clear formatting', icon: 'clear', action: 'clear' },
-            ],
-          },
-          {
-            label: 'Edit', icon: 'selectall',
-            sub: [
-              { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
-              ...(src
-                ? [
-                    { label: 'Select line', icon: 'line', action: 'selectLine' },
-                    { label: 'Duplicate line', icon: 'dup', action: 'dupLine' },
-                    { label: 'Move line up', icon: 'up', action: 'lineUp' },
-                    { label: 'Move line down', icon: 'down', action: 'lineDown' },
-                  ]
-                : []),
-              { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
-              { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
-              { sep: true },
-              { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
-              { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' },
-              { label: 'Word count', icon: 'count', action: 'wordcount' },
-            ],
-          },
-        ],
-      },
+      { head: 'Clipboard', items: clip },
+      { head: 'Insert', items: direct },
+      { head: 'Edit', items: [...editGroup, { label: 'More edit', icon: 'selectall', sub: editMore }] },
+      { head: 'Menu', noHead: true, items: [find, { label: 'Insert more', icon: 'insert', sub: more }] },
     ]
   }
 
@@ -987,11 +1198,37 @@ export function init(app) {
     panel.appendChild(input)
     panel.appendChild(el('div', 'ctx-hint', 'Enter to apply, Escape to cancel'))
     root.appendChild(panel)
-    placeSub(panel, parentBtn)
-    panel.style.left = sub ? sub.panel.style.left : panel.style.left
-    const bound = sub ? sub.panel.getBoundingClientRect() : bar.getBoundingClientRect()
-    panel.style.left = Math.min(bound.right - 3, window.innerWidth - panel.offsetWidth - 8) + 'px'
-    panel.style.top = Math.max(8, parentBtn.getBoundingClientRect().top - 5) + 'px'
+    if (expanded) {
+      placeSub(panel, parentBtn)
+      panel.style.left = sub ? sub.panel.style.left : panel.style.left
+      const bound = sub ? sub.panel.getBoundingClientRect() : bar.getBoundingClientRect()
+      panel.style.left = Math.min(bound.right - 3, window.innerWidth - panel.offsetWidth - 8) + 'px'
+      panel.style.top = Math.max(8, parentBtn.getBoundingClientRect().top - 5) + 'px'
+    } else {
+      // bar collapsed: the box sits just under the bar (above it when there is no room)
+      const br = bar.getBoundingClientRect()
+      const pw = panel.offsetWidth
+      const ph = panel.offsetHeight
+      panel.style.left = Math.max(8, Math.min(br.left, window.innerWidth - pw - 8)) + 'px'
+      panel.style.top = (br.bottom + 4 + ph > window.innerHeight - 4 ? Math.max(8, br.top - ph - 4) : br.bottom + 4) + 'px'
+      panel.style.transformOrigin = 'top left'
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          const url = safeUrl(input.value)
+          if (!url) return input.classList.add('bad')
+          closeSubs()
+          hideBar()
+          focusEditor()
+          richLink(url)
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          closeSubs()
+          focusEditor()
+        }
+      })
+    }
     subs.push({ panel, buttons: [], parentBtn, link: input })
     input.focus()
   }
@@ -1004,6 +1241,7 @@ export function init(app) {
   }
 
   function openMenu(x, y) {
+    closeDd() // one floating panel at a time: a bar drop-down never stays under the menu
     captureRestore()
     if (expanded) hideAll()
     const sel = selectionRect()
@@ -1023,6 +1261,7 @@ export function init(app) {
       bar.classList.add('open')
     }
     syncSizeButtons()
+    syncState()
     list.style.maxHeight = ''
     list.inert = false
     expanded = true
@@ -1038,13 +1277,13 @@ export function init(app) {
     const room = (up) => (up ? br0.bottom - br0.height - 8 : window.innerHeight - 8 - br0.bottom) - 9
     let level = 0
     let up = false
-    for (; level <= 4; level++) {
+    for (; level <= 2; level++) {
       fillList(level)
       const natural = list.scrollHeight
       // bar below the selection: grow upward and shift sideways (below). Bar above it: grow upward. Upward has no room: grow down.
       if (sel) up = barBelow ? natural <= room(true) : true
       else up = room(false) < natural && room(true) > room(false) // at the pointer: down, or up when down has no room
-      if (natural <= room(up) || level === 4) break
+      if (natural <= room(up) || level === 2) break
     }
     const lh = list.scrollHeight
     bar.classList.toggle('up', up)
@@ -1072,6 +1311,7 @@ export function init(app) {
 
   function hideAll() {
     clearTimeout(timer)
+    closeDd()
     closeSubs()
     const was = expanded
     expanded = false
@@ -1108,6 +1348,11 @@ export function init(app) {
 
   document.addEventListener('keydown', (e) => {
     const k = e.key
+    if (dd && dd.panel.contains(document.activeElement)) return // the open drop-down handles its own keys
+    if (dd && e.key === 'Escape') { // opened with the mouse, so focus is elsewhere: Escape still closes it first
+      e.preventDefault()
+      return closeDd()
+    }
     if (bar.hidden) return
     // collapsed bar: Escape dismisses it for this selection
     if (!expanded && k === 'Escape') {

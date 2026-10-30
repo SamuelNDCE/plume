@@ -7,6 +7,7 @@ import {
   Sheet, colToLetters, parseRange, addr, displayValue, isErr, computeStats,
   detectHeader, formatDisplay, parseCsv, serializeCsv, shiftFormula,
 } from './sheet-core.js'
+import { wrapCommand } from './shortcuts.js'
 
 const ROW_H = 24
 const HEAD_H = 24
@@ -225,6 +226,7 @@ export async function mount(host, opts, ctx) {
   addBtn('header', 'Header', 'Treat the first row as a header', () => setHeader(!header), null, 'Toggle header row')
   addBtn('freeze', 'Freeze', 'Keep the header row visible while scrolling', () => setFreeze(!freeze), null, 'Toggle freeze header')
   addBtn('fit', null, 'Autofit column widths', () => autofitAll(), 'fit', 'Autofit columns')
+  addBtn('replace', 'Replace', 'Find and replace (Ctrl+H)', () => openFindReplace(), null, 'Find and replace...')
   sep()
   const delimSel = h('select', 'sh-select')
   delimSel.title = 'Delimiter used when saving (converts the file)'
@@ -1426,6 +1428,8 @@ export async function mount(host, opts, ctx) {
       { label: `Sort column ${colToLetters(col)} A-Z`, run: () => opSort(col, 'asc') },
       { label: `Sort column ${colToLetters(col)} Z-A`, run: () => opSort(col, 'desc') },
       { label: `Filter column ${colToLetters(col)}...`, run: () => openColumnPanel(col, null, lastMouse) },
+      '-',
+      { label: 'Find and replace...', hint: 'Ctrl+H', run: () => openFindReplace() },
     ]
   }
 
@@ -1557,6 +1561,110 @@ export async function mount(host, opts, ctx) {
     placeFloating(p, x, y)
     ti.focus({ preventScroll: true })
   }
+  // Find and replace (Ctrl+H). Search covers the selection if it is more than one cell, else the whole sheet.
+  let frState = { q: '', r: '', matchCase: false, whole: false }
+  function openFindReplace() {
+    if (editing) commitEdit(0, 0, true)
+    closeMenu()
+    const p = h('div', 'sh-menu sh-pop')
+    p.setAttribute('role', 'dialog')
+    p.setAttribute('aria-label', 'Find and replace')
+    p.append(h('div', 'sh-pop-title', 'Find and replace'))
+    const fi = h('input', 'sh-pop-input')
+    fi.placeholder = 'Find'
+    fi.value = frState.q
+    fi.spellcheck = false
+    const ri = h('input', 'sh-pop-input')
+    ri.placeholder = 'Replace with'
+    ri.value = frState.r
+    ri.spellcheck = false
+    p.append(fi, ri)
+    const opts = h('div', 'sh-pop-row')
+    const mkCk = (label, key) => {
+      const l = h('label', 'sh-pop-note')
+      const ck = h('input')
+      ck.type = 'checkbox'
+      ck.checked = frState[key]
+      ck.addEventListener('change', () => {
+        frState[key] = ck.checked
+        info()
+      })
+      l.append(ck, document.createTextNode(' ' + label))
+      opts.append(l)
+    }
+    mkCk('Match case', 'matchCase')
+    mkCk('Whole cell', 'whole')
+    p.append(opts)
+    const note = h('div', 'sh-pop-note')
+    p.append(note)
+    const R0 = selRect()
+    const scoped = R0.r1 > R0.r0 || R0.c1 > R0.c0 ? { r0: R0.r0, r1: R0.r1, c0: R0.c0, c1: R0.c1 } : null
+    const o = () => ({ matchCase: frState.matchCase, whole: frState.whole })
+    const matches = () => (frState.q ? sheet.findAll(frState.q, o(), scoped).filter(([r]) => !list || list.includes(r)) : [])
+    function info() {
+      frState.q = fi.value
+      frState.r = ri.value
+      note.textContent = frState.q ? matches().length + (scoped ? ' in selection' : ' found') : ''
+    }
+    function next(back) {
+      info()
+      const m = matches()
+      if (!m.length) return
+      const cur = [sel.r, sel.c]
+      let pick = back ? m[m.length - 1] : m[0]
+      if (back) for (const x of m) { if (x[0] < cur[0] || (x[0] === cur[0] && x[1] < cur[1])) pick = x }
+      else for (const x of m) { if (x[0] > cur[0] || (x[0] === cur[0] && x[1] > cur[1])) { pick = x; break } }
+      select(pick[0], pick[1], false)
+    }
+    function replaceOne() {
+      info()
+      const m = matches()
+      const cur = m.find(([r, c]) => r === sel.r && c === sel.c)
+      if (!cur) return next(false)
+      if (sheet.replaceIn([cur], frState.q, frState.r, o())) afterChange()
+      next(false)
+    }
+    function replaceAll() {
+      info()
+      const m = matches()
+      const n = sheet.replaceIn(m, frState.q, frState.r, o())
+      if (n) afterChange()
+      note.textContent = n + (n === 1 ? ' cell replaced' : ' cells replaced')
+    }
+    const row = h('div', 'sh-pop-row')
+    const mk = (label, fn, cls) => {
+      const b = h('button', 'sh-btn' + (cls ? ' ' + cls : ''), label)
+      b.type = 'button'
+      b.addEventListener('click', fn)
+      row.append(b)
+    }
+    mk('Find next', () => next(false), 'primary')
+    mk('Previous', () => next(true))
+    mk('Replace', replaceOne)
+    mk('Replace all', replaceAll)
+    p.append(row)
+    fi.addEventListener('input', info)
+    ri.addEventListener('input', info)
+    p.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Escape') {
+        closeMenu()
+        grid.focus({ preventScroll: true })
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (e.target === ri) replaceOne()
+        else next(e.shiftKey)
+      }
+    })
+    menuEl = p
+    const rc = gridRect()
+    placeFloating(p, rc.right - 310, rc.top + HEAD_H)
+    info()
+    fi.focus({ preventScroll: true })
+    fi.select()
+  }
+  // The app's Ctrl+H command (text find and replace) runs first from a window-level handler, so take the command over while the grid has focus.
+  offs.push(wrapCommand(window.__plume, 'find.replace', () => !destroyed && document.activeElement === grid, () => openFindReplace()))
   on(
     document,
     'mousedown',

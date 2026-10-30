@@ -173,8 +173,9 @@ const mdFilters = [
   { name: 'All files', extensions: ['*'] },
 ]
 
-ipcMain.handle('file:open-dialog', async () => {
-  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: mdFilters })
+const pdfFilters = [{ name: 'PDF', extensions: ['pdf'] }, { name: 'All files', extensions: ['*'] }]
+ipcMain.handle('file:open-dialog', async (_e, kind) => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: kind === 'pdf' ? pdfFilters : mdFilters })
   if (r.canceled) return []
   r.filePaths.forEach((p) => grantQuiet(p))
   return r.filePaths
@@ -311,8 +312,8 @@ ipcMain.handle('file:write-bytes', (_e, p, bytes) => {
   writeAtomic(p, Buffer.from(bytes))
   return true
 })
-ipcMain.handle('file:save-dialog', async (_e, suggested) => {
-  const r = await dialog.showSaveDialog(win, { defaultPath: suggested || 'Untitled.md', filters: mdFilters })
+ipcMain.handle('file:save-dialog', async (_e, suggested, kind) => {
+  const r = await dialog.showSaveDialog(win, { defaultPath: suggested || 'Untitled.md', filters: kind === 'pdf' ? pdfFilters : mdFilters })
   if (r.canceled) return null
   grantQuiet(r.filePath)
   return r.filePath
