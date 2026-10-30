@@ -477,3 +477,19 @@ test('blank rows that were in the original file are kept', () => {
   s.setCell(0, 0, 'z')
   assert.equal(s.serialize(), 'z,b\n\n,\n')
 })
+
+// ---------------------------------------------------------------- find and replace
+test('findAll and replaceIn: literal text, case and whole-cell options, one undo step', () => {
+  const s = Sheet.fromText('a,b\nx.y,X.y\nxzy,x.y.z\n')
+  assert.deepEqual(s.findAll('x.y'), [[1, 0], [1, 1], [2, 1]])
+  assert.deepEqual(s.findAll('x.y', { matchCase: true }), [[1, 0], [2, 1]])
+  assert.deepEqual(s.findAll('x.y', { whole: true }), [[1, 0], [1, 1]])
+  assert.deepEqual(s.findAll('x.y', {}, { r0: 2, r1: 2, c0: 0, c1: 1 }), [[2, 1]])
+  assert.deepEqual(s.findAll(''), [])
+  assert.equal(s.replaceIn(s.findAll('x.y'), 'x.y', '$&Q'), 3)
+  assert.equal(s.raw(1, 0), '$&Q')
+  assert.equal(s.raw(2, 1), '$&Q.z')
+  assert.equal(s.undo() !== false, true)
+  assert.equal(s.raw(1, 0), 'x.y')
+  assert.equal(s.raw(2, 1), 'x.y.z')
+})

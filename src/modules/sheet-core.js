@@ -1293,4 +1293,39 @@ export class Sheet {
     this._push([this._apply({ t: 'meta', a: this.delimiter, b: d })], 'Delimiter')
     return true
   }
+
+  // Find cells whose raw text contains `query` (whole cell with opts.whole). Returns [[r, c], ...] in reading order.
+  findAll(query, { matchCase = false, whole = false } = {}, rng = null) {
+    const out = []
+    if (query === '' || query == null) return out
+    const q = matchCase ? query : query.toLowerCase()
+    const r0 = rng ? rng.r0 : 0
+    const r1 = rng ? Math.min(rng.r1, this.rows.length - 1) : this.rows.length - 1
+    for (let r = r0; r <= r1; r++) {
+      const row = this.rows[r]
+      if (!row) continue
+      const c0 = rng ? rng.c0 : 0
+      const c1 = rng ? Math.min(rng.c1, row.length - 1) : row.length - 1
+      for (let c = c0; c <= c1; c++) {
+        const v = row[c]
+        if (!v) continue
+        const t = matchCase ? v : v.toLowerCase()
+        if (whole ? t === q : t.includes(q)) out.push([r, c])
+      }
+    }
+    return out
+  }
+
+  // Replace in the given cells (from findAll) as ONE undo step. Returns how many cells changed.
+  replaceIn(cells, query, repl, { matchCase = false, whole = false } = {}) {
+    const ch = []
+    const re = new RegExp([...query].map((ch) => (/[A-Za-z0-9_ ]/.test(ch) ? ch : String.fromCharCode(92) + ch)).join(''), matchCase ? 'g' : 'gi')
+    for (const [r, c] of cells) {
+      const old = this.raw(r, c)
+      const nw = whole ? repl : old.replace(re, () => repl)
+      if (nw !== old) ch.push([r, c, nw])
+    }
+    if (!ch.length) return 0
+    return this.setCells(ch, 'Replace') ? ch.length : 0
+  }
 }
