@@ -974,8 +974,8 @@ export function init(app) {
     return [
       { head: 'Clipboard', items: clip },
       { head: 'Insert', items: direct },
-      { head: 'Edit', items: editGroup },
-      { head: 'Menu', noHead: true, items: [find, { label: 'Insert more', icon: 'insert', sub: more }, { label: 'More edit', icon: 'selectall', sub: editMore }] },
+      { head: 'Edit', items: [...editGroup, { label: 'More edit', icon: 'selectall', sub: editMore }] },
+      { head: 'Menu', noHead: true, items: [find, { label: 'Insert more', icon: 'insert', sub: more }] },
     ]
   }
 
