@@ -925,3 +925,36 @@ body.pdf-pages:not(.pages-off) #files-pane, body.pdf-pages:not(.pages-off) #sear
 .find-btn.txt { width: auto; padding: 0 8px; font: inherit; font-size: 13px; color: var(--fg); white-space: nowrap; }
 .replace-row[hidden] { display: none; }
 @media print { .kb-panel { display: none; } }
+
+/* PDF editing (src/modules/pdfedit.js): second toolbar row, tool overlays on each page, form inputs, text popover. Tokens only. */
+.pdfedit-bar { height: auto; min-height: var(--header-h); flex-wrap: wrap; row-gap: 2px; padding-top: 2px; padding-bottom: 2px; overflow: visible; }
+.pdfedit-bar[hidden] { display: none; }
+.pdfedit-btn.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pdfedit-hint { flex: 1 1 220px; min-width: 0; padding: 0 8px; font-size: 12.5px; color: var(--fg-muted); }
+.pdfedit-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.pdfedit-fields, .pdfedit-cap { position: absolute; inset: 0; }
+.pdfedit-cap { pointer-events: none; touch-action: none; }
+.pdfedit-tooling .pdfedit-cap { pointer-events: auto; z-index: 2; }
+.pdfedit-tool-note .pdfedit-cap { cursor: copy; }
+.pdfedit-tool-ink .pdfedit-cap, .pdfedit-tool-cover .pdfedit-cap { cursor: crosshair; }
+.pdfedit-tooling .pdfedit-fields { pointer-events: none; }
+.pdfedit-rubber { position: absolute; box-sizing: border-box; background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1.5px dashed var(--accent); pointer-events: none; }
+.pdfedit-stroke { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pdfedit-stroke polyline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pdfedit-field { position: absolute; box-sizing: border-box; margin: 0; padding: 0 2px; pointer-events: auto; font: inherit; font-size: calc(var(--pe-fs, 11) * var(--total-scale-factor, 1) * 1px); line-height: 1.15; color: var(--fg); background: var(--bg-3); border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px; resize: none; }
+.pdfedit-field[type="checkbox"], .pdfedit-field[type="radio"] { padding: 0; accent-color: var(--accent); }
+.pdfedit-field:focus-visible { outline: 2px solid var(--ring, var(--accent)); outline-offset: 0; }
+.pdfedit-field:disabled { opacity: .7; }
+.pdfp-item.pdfedit-sel { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
+.pdfp-item.pdfedit-drop { box-shadow: 0 -3px 0 var(--accent); }
+.pdfedit-pop { position: absolute; z-index: 6; width: 272px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-3); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); font-size: 13px; }
+.pdfedit-pop-title { color: var(--fg-muted); font-size: 12.5px; }
+.pdfedit-pop-text { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; font-size: 13px; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 7px; resize: vertical; }
+.pdfedit-pop-text:focus-visible, .pdfedit-pop-btn:focus-visible { outline: 2px solid var(--ring, var(--accent)); outline-offset: 1px; }
+.pdfedit-pop-row { display: flex; justify-content: flex-end; gap: 6px; }
+.pdfedit-pop-btn { height: 28px; padding: 0 12px; font: inherit; font-size: 13px; color: var(--fg); background: transparent; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; transition: background var(--t, 120ms); }
+.pdfedit-pop-btn:hover { background: var(--hover); }
+.pdfedit-pop-ok { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+.pdfedit-pop-ok:hover { background: var(--accent); filter: brightness(1.08); }
+@media (prefers-reduced-motion: reduce) { .pdfedit-pop-btn { transition: none; } }
+@media print { .pdfedit-bar, .pdfedit-layer, .pdfedit-pop { display: none; } }

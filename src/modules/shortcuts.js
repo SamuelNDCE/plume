@@ -34,7 +34,9 @@ export const PDF_KEYS = [
     ['Up / Left / PageUp', 'Previous page (page list focused)'],
     ['Home / End', 'First or last page'],
     ['Type a number', 'Jump to that page'],
-    ['Ctrl+Shift+R', 'Rotate the page for viewing (not saved)'],
+    ['Ctrl+Shift+R', 'Rotate the page (saved when you save the file)'],
+    ['Alt+Up / Alt+Down', 'Move the page up or down (edit tools)'],
+    ['Ctrl+Z / Ctrl+Y', 'Undo or redo a PDF edit'],
     ['Ctrl+P', 'Print the PDF'],
   ]],
   ['Find', [

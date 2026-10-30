@@ -313,7 +313,7 @@ function getMarkdown() {
 // Pull the live editor text into the doc record.
 function syncActive() {
   const d = doc()
-  if (!d || d.kind === 'image' || d.kind === 'xlsx' || (d.kind === 'table' && app.state.mode === 'table')) return
+  if (!d || d.kind === 'image' || d.kind === 'xlsx' || d.kind === 'pdf' || (d.kind === 'table' && app.state.mode === 'table')) return
   if (app.state.mode === 'wysiwyg' && crepe) d.content = crepe.getMarkdown()
   else if (app.state.mode === 'source' && code) d.content = code.getValue()
   d.dirty = d.content !== d.saved
@@ -435,7 +435,7 @@ async function openFile() {
 async function saveDoc(d, forceAs = false) {
   if (d.kind === 'image') return true
   // A read-only preview holds only the start of a file: writing it would truncate the real file. Checked before any write.
-  if (d.readOnly || d.truncated) {
+  if ((d.readOnly && d.kind !== 'pdf') || d.truncated) {
     app.toast('Read-only preview: nothing was saved')
     return false
   }
@@ -473,8 +473,32 @@ async function saveDoc(d, forceAs = false) {
   }
   let p = d.path
   if (!p || forceAs) {
-    p = await api.saveDialog(d.path || d.name)
+    p = await api.saveDialog(d.path || d.name, d.kind === 'pdf' ? 'pdf' : undefined)
     if (!p) return false
+  }
+  if (d.kind === 'pdf') {
+    // PDF: pdfedit.js returns the edited bytes (or the original ones). They go out through the grant-checked file:write-bytes.
+    // If pdf-lib cannot build them, nothing is written.
+    try {
+      const x = await import('./modules/pdfedit.js')
+      const bytes = await x.savePdf(d)
+      await api.writeBytes(p, bytes)
+      x.commitSaved(d, bytes)
+    } catch (e) {
+      app.toast(String((e && e.message) || 'Save failed').slice(0, 160))
+      return false
+    }
+    d.path = p
+    d.name = baseName(p)
+    d.dirty = false
+    const st = await api.stat(p)
+    d.mtime = st?.mtimeMs
+    d.size = st?.size
+    rememberRecent(p)
+    updateTitle()
+    app.bus.emit('tab:list', app.state.tabs)
+    app.bus.emit('file:saved', d)
+    return true
   }
   if (d.kind === 'xlsx') {
     // Excel workbook: the viewer module patches the edited cells into the original zip and returns the bytes.
@@ -615,7 +639,7 @@ function saveSession() {
       'folio.session',
       JSON.stringify({
         active: app.state.active,
-        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, log: !!t.log, truncated: !!t.truncated, totalSize: t.totalSize, mtime: t.mtime, size: t.size, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.kind === 'xlsx' ? false : t.dirty })),
+        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, log: !!t.log, truncated: !!t.truncated, totalSize: t.totalSize, mtime: t.mtime, size: t.size, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.kind === 'xlsx' || t.kind === 'pdf' ? false : t.dirty })),
       }),
     )
   } catch {}
