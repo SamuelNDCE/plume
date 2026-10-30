@@ -51,8 +51,6 @@ class Commands {
 
 const DEFAULTS = {
   theme: 'light',
-  focusMode: false,
-  typewriter: false,
   sidebar: true,
   sidebarTab: 'files',
   sidebarWidth: 260,

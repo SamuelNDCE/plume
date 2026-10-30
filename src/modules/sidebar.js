@@ -614,7 +614,7 @@ export function init(app) {
     [
       'View',
       [
-        ['Focus', 'view.focus'], ['Typewriter', 'view.typewriter'], ['Toggle sidebar', 'view.sidebar'], ['Toggle outline', 'outline.show'], null,
+        ['Toggle sidebar', 'view.sidebar'], ['Toggle outline', 'outline.show'], null,
         ['Rich', setMode('rich'), 'Ctrl+/'], ['Source', setMode('source'), 'Ctrl+/'], null,
         ['Zoom in', 'view.zoomIn'], ['Zoom out', 'view.zoomOut'], ['Reset zoom', 'view.zoomReset'],
       ],

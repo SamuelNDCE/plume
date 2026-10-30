@@ -6,6 +6,12 @@ All notable changes to Plume are written here. The format follows [Keep a Change
 
 Nothing yet.
 
+## [0.5.5] - 2026-10-30
+
+### Removed
+
+- Focus mode and typewriter mode, with their settings, menu entries, the F8 and F9 shortcuts, and their styles. They were the source of the selection and scroll problems in the rich view.
+
 ## [0.5.4] - 2026-10-30
 
 ### Changed

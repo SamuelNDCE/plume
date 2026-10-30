@@ -781,8 +781,6 @@ function applySettings() {
   if (Number(s.get('lineHeight')) === 1.7) root.style.removeProperty('--lh')
   else root.style.setProperty('--lh', String(s.get('lineHeight')))
   root.dataset.font = s.get('fontFamily') || 'theme'
-  document.body.classList.toggle('focus-mode', s.get('focusMode'))
-  document.body.classList.toggle('typewriter', s.get('typewriter'))
   document.body.classList.toggle('no-sidebar', !s.get('sidebar'))
   document.body.classList.toggle('zen', !!s.get('zen'))
   $('#sidebar').style.width = s.get('sidebarWidth') + 'px'
@@ -793,36 +791,6 @@ function applySettings() {
 }
 app.bus.on('settings:change', applySettings)
 
-// time of the last key press, so the typewriter centring below follows keyboard moves only
-let lastKeyAt = -1e9
-let lastActiveBlock = null
-document.addEventListener('keydown', () => { lastKeyAt = performance.now() }, true)
-document.addEventListener('selectionchange', () => {
-  const focusMode = document.body.classList.contains('focus-mode')
-  const typewriter = document.body.classList.contains('typewriter')
-  if (!focusMode && !typewriter) return
-  const sel = document.getSelection()
-  if (!sel.anchorNode) return
-  let n = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode
-  const pm = editorEl.querySelector('.ProseMirror')
-  if (!pm || !pm.contains(n)) return
-  while (n && n.parentElement !== pm) n = n.parentElement
-  if (!n) return
-  // Focus mode dims the blocks other than the current one. The class is only moved when the current block changes: editing a
-  // block on every selection change makes the editor re-render it, which fires another selection change, an endless loop.
-  if (focusMode && n !== lastActiveBlock) {
-    if (lastActiveBlock && lastActiveBlock.isConnected) lastActiveBlock.classList.remove('is-active-block')
-    n.classList.add('is-active-block')
-    lastActiveBlock = n
-  }
-  // Typewriter mode centres the cursor line after keyboard moves only, and never touches the editor's DOM. A centring scroll while the
-  // mouse selects text moves the view under the pointer.
-  if (typewriter && performance.now() - lastKeyAt < 400) {
-    const r = n.getBoundingClientRect()
-    const mid = scrollEl.getBoundingClientRect().top + scrollEl.clientHeight / 2
-    scrollEl.scrollBy({ top: r.top - mid + r.height / 2, behavior: 'smooth' })
-  }
-})
 
 ;(() => {
   const rz = $('#sidebar-resizer')
@@ -852,8 +820,6 @@ C('file.next', 'Next Open Document', () => app.state.tabs.length && activate((ap
 C('file.prev', 'Previous Open Document', () => app.state.tabs.length && activate((app.state.active - 1 + app.state.tabs.length) % app.state.tabs.length), 'Ctrl+Shift+Tab', 'Documents')
 C('view.source', 'Toggle Rich / Source View', toggleSource, 'Ctrl+/', 'View')
 C('view.sidebar', 'Toggle Sidebar', () => app.settings.set('sidebar', !app.settings.get('sidebar')), 'Ctrl+\\', 'View')
-C('view.focus', 'Toggle Focus Mode', () => app.settings.set('focusMode', !app.settings.get('focusMode')), 'F8', 'View')
-C('view.typewriter', 'Toggle Typewriter Mode', () => app.settings.set('typewriter', !app.settings.get('typewriter')), 'F9', 'View')
 C('view.zoomIn', 'Increase Font Size', () => app.settings.set('fontSize', Math.min(32, app.settings.get('fontSize') + 1)), 'Ctrl+=|Ctrl++', 'View')
 C('view.zoomOut', 'Decrease Font Size', () => app.settings.set('fontSize', Math.max(11, app.settings.get('fontSize') - 1)), 'Ctrl+-', 'View')
 C('view.zoomReset', 'Reset Font Size', () => app.settings.set('fontSize', Math.round((17 * (Number(app.settings.get('defaultZoom')) || 100)) / 100)), 'Ctrl+0', 'View')

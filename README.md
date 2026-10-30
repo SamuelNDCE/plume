@@ -74,7 +74,7 @@ The Settings page. Press **`Ctrl+,`** to open it.
 - Tables, task lists, footnotes, fenced code with highlighting and KaTeX math.
 - Mermaid diagrams, loaded only when a document uses one, and built-in `chart` blocks (bar, line, area, pie) from a few lines of JSON.
 - Paste or drop images. They are saved to an `assets/` folder beside the file.
-- Find and replace (`Ctrl+F`, `Ctrl+H`) with case, whole word and regex. Command palette (`Ctrl+P`). Focus, typewriter, reading, zen and presentation modes. Spellcheck, word count and reading time.
+- Find and replace (`Ctrl+F`, `Ctrl+H`) with case, whole word and regex. Command palette (`Ctrl+P`). Reading, zen and presentation modes. Spellcheck, word count and reading time.
 - Export to self-contained HTML or PDF, print, or copy as Markdown or HTML.
 - Outline rail: a slim strip of lines down the left edge, one per heading. Click a line to jump to that heading.
 
@@ -134,7 +134,6 @@ The Settings page. Press **`Ctrl+,`** to open it.
 | `Ctrl+Shift+D` | Insert date and time |
 | `Ctrl+,` | Settings |
 | `F5` | Presentation |
-| `F8` / `F9` | Focus / typewriter mode |
 | `Ctrl+=` `Ctrl+-` `Ctrl+0` | Font size |
 
 The full list is in Settings, under Shortcuts.

@@ -13,7 +13,7 @@ const FALLBACK_THEMES = [
   ['midnight', 'Midnight', '#0b1220', '#cfd8e8', '#2dd4bf'],
 ].map(([id, name, bg, fg, accent]) => ({ id, name, group: 'Built-in', preview: { bg, fg, accent, colors: CHART_COLORS } }))
 const DEFAULTS = {
-  theme: 'light', focusMode: false, typewriter: false, sidebar: true, sidebarTab: 'files',
+  theme: 'light', sidebar: true, sidebarTab: 'files',
   sidebarWidth: 260, fontSize: 17, fontFamily: 'theme', maxWidth: 820, autosave: true, checkUpdates: true,
   spellcheck: true, lineNumbersSource: true, wrapSource: true, lineHeight: 1.7, zen: false,
   fontBody: '', fontHeading: '', fontMono: '', headingScale: 0, paraSpacing: 0, accent: '',
@@ -525,8 +525,6 @@ export function init(app) {
     const g = group('Writing')
     g.append(
       toggle('spellcheck', 'Spellcheck', 'Underline misspelled words while you type.'),
-      toggle('focusMode', 'Focus mode', 'Dim everything except the current paragraph.'),
-      toggle('typewriter', 'Typewriter mode', 'Keep the cursor line vertically centered.')
     )
     const g2 = group('Source view')
     g2.append(

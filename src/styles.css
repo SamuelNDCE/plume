@@ -147,11 +147,6 @@ body.no-sidebar #sidebar, body.no-sidebar #sidebar-resizer { display: none; }
 .milkdown .ProseMirror .milkdown-list-item-block li { margin: 0; }
 .milkdown .ProseMirror .milkdown-list-item-block .list-item { padding: 2px 0; align-items: flex-start; }
 
-/* focus + typewriter */
-body.focus-mode .ProseMirror > * { opacity: .32; }
-body.focus-mode .ProseMirror > .is-active-block { opacity: 1; }
-body.typewriter #editor { padding-bottom: 50vh; }
-body.typewriter .ProseMirror { padding-bottom: 40vh; }
 
 /* zen + no-sidebar */
 body.zen #rail, body.zen #sidebar, body.zen #sidebar-resizer, body.zen #header, body.zen #statusbar { display: none !important; }
