@@ -2,11 +2,7 @@
 
 All notable changes to Plume are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-Nothing yet.
-
-## [0.5.3] - Unreleased
+## [0.5.3] - 2026-10-30
 
 ### Added
 

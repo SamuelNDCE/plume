@@ -135,6 +135,25 @@ The Settings page. Press **`Ctrl+,`** to open it.
 
 The full list is in Settings, under Shortcuts.
 
+## Speed and size, against Notepad
+
+Measured on the same PC, with the same files, against the Notepad that comes with Windows. Full numbers and the method are in [STATISTICS.md](docs/STATISTICS.md).
+
+| | Plume | Notepad |
+| --- | ---: | ---: |
+| Memory with a 50 MB log open | 1,866 MB | 261 MB |
+| Window ready, startup | 925 ms | 306 ms |
+| Installed size | 679 MB | 0.35 MB (program file, part of Windows) |
+
+Notepad is faster to open and much smaller. Plume is larger because it renders Markdown, spreadsheets, PDFs and logs in one window. Plume's idle CPU is about a third of Notepad's when both are idle.
+
+<p align="center">
+  <img src="docs/benchmarks/readme-memory-50mb.svg" alt="Memory with a 50 MB log open: Plume 1866 MB, Notepad 261 MB" width="46%">
+  <img src="docs/benchmarks/readme-ready-startup.svg" alt="Window ready at startup: Plume 925 ms, Notepad 306 ms" width="46%">
+</p>
+
+**Does Plume spy on you?** No, and that is the joke. Plume has no Copilot, no telemetry and no network calls except the optional update check, which you can turn off in Settings.
+
 ## Install
 
 Download a build from [Releases](https://github.com/SamuelNDCE/plume/releases/latest).

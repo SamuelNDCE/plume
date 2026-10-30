@@ -1,0 +1,146 @@
+﻿[
+    {
+        "App":  "Plume",
+        "Test":  "startup",
+        "ReadyMs":  986,
+        "MemoryMB":  369,
+        "IdleCpuPct":  1.6,
+        "Processes":  4
+    },
+    {
+        "App":  "Plume",
+        "Test":  "startup",
+        "ReadyMs":  923,
+        "MemoryMB":  372,
+        "IdleCpuPct":  4.2,
+        "Processes":  4
+    },
+    {
+        "App":  "Plume",
+        "Test":  "startup",
+        "ReadyMs":  865,
+        "MemoryMB":  370,
+        "IdleCpuPct":  10.4,
+        "Processes":  4
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "startup",
+        "ReadyMs":  181,
+        "MemoryMB":  236,
+        "IdleCpuPct":  13.5,
+        "Processes":  1
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "startup",
+        "ReadyMs":  376,
+        "MemoryMB":  242,
+        "IdleCpuPct":  34.9,
+        "Processes":  1
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "startup",
+        "ReadyMs":  362,
+        "MemoryMB":  229,
+        "IdleCpuPct":  45.3,
+        "Processes":  1
+    },
+    {
+        "App":  "Plume",
+        "Test":  "open-small",
+        "ReadyMs":  896,
+        "MemoryMB":  372,
+        "IdleCpuPct":  2.1,
+        "Processes":  4
+    },
+    {
+        "App":  "Plume",
+        "Test":  "open-small",
+        "ReadyMs":  870,
+        "MemoryMB":  376,
+        "IdleCpuPct":  3.1,
+        "Processes":  4
+    },
+    {
+        "App":  "Plume",
+        "Test":  "open-small",
+        "ReadyMs":  847,
+        "MemoryMB":  373,
+        "IdleCpuPct":  2.1,
+        "Processes":  4
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "open-small",
+        "ReadyMs":  357,
+        "MemoryMB":  242,
+        "IdleCpuPct":  0,
+        "Processes":  2
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "open-small",
+        "ReadyMs":  376,
+        "MemoryMB":  241,
+        "IdleCpuPct":  0,
+        "Processes":  2
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "open-small",
+        "ReadyMs":  353,
+        "MemoryMB":  241,
+        "IdleCpuPct":  2.1,
+        "Processes":  2
+    },
+    {
+        "App":  "Plume",
+        "Test":  "open-50mb-log",
+        "ReadyMs":  1019,
+        "MemoryMB":  1873,
+        "IdleCpuPct":  14.6,
+        "Processes":  4
+    },
+    {
+        "App":  "Plume",
+        "Test":  "open-50mb-log",
+        "ReadyMs":  1018,
+        "MemoryMB":  1857,
+        "IdleCpuPct":  0.5,
+        "Processes":  4
+    },
+    {
+        "App":  "Plume",
+        "Test":  "open-50mb-log",
+        "ReadyMs":  1000,
+        "MemoryMB":  1869,
+        "IdleCpuPct":  0,
+        "Processes":  4
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "open-50mb-log",
+        "ReadyMs":  361,
+        "MemoryMB":  261,
+        "IdleCpuPct":  7.8,
+        "Processes":  2
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "open-50mb-log",
+        "ReadyMs":  340,
+        "MemoryMB":  262,
+        "IdleCpuPct":  4.7,
+        "Processes":  2
+    },
+    {
+        "App":  "Notepad",
+        "Test":  "open-50mb-log",
+        "ReadyMs":  352,
+        "MemoryMB":  261,
+        "IdleCpuPct":  8.3,
+        "Processes":  2
+    }
+]
