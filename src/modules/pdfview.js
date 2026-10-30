@@ -661,6 +661,7 @@ class PdfViewer {
   /* ---------- open ---------- */
   async open() {
     let lib
+    this.d.readOnly = false // PDFs can be edited and saved now (pdfedit.js), so the status bar must not say read-only preview
     try {
       lib = await loadLib()
       this.lib = lib
