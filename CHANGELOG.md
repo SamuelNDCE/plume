@@ -6,10 +6,16 @@ All notable changes to Plume are written here. The format follows [Keep a Change
 
 Nothing yet.
 
-## [0.5.4] - Unreleased
+## [0.5.4] - 2026-10-30
+
+### Changed
+
+- Electron 44.10 to 45.1.0. Plume does not use the Node globals that Electron 45 removed from sandboxed preload scripts.
+- Dependencies: CodeMirror view and autocomplete, Milkdown Crepe 7.23, Mermaid 12.2, Vite 8.3.5, electron-updater 6.8.11, electron-builder 26.18, and the GitHub Actions upload and download artifact steps.
 
 ### Fixed
 
+- Typewriter mode: it no longer loops on every selection change, which stopped drag selection, the title and size bar and the wheel. The cursor line is centred after keyboard moves only.
 - Selection bar and scrolling in the rich view: a drag selection no longer leaves the editor scroller locked; the title and size bar shows after selecting.
 - The status bar shows the file size of unsaved documents; the line-ending chip and the read timer were removed.
 - Menu: Save and Save As at the top, Go to line and Search in folder at the top level, the Custom group removed.
