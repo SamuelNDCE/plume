@@ -4,7 +4,7 @@
 //   and size (a drop-down of the text sizes). The block-style drop-down lists Paragraph, Title, Heading 2 to 6, Quote and Code block.
 //   It replaces Crepe's own selection toolbar (turned off in main.js).
 //   Right-click: the SAME bar expands in place into the menu. The bar row stays on top, and the menu rows
-//   (Clipboard, direct Link, Quote, Bullet list, Numbered list and Task list, Find, then Insert more and Edit) open below it; each submenu opens on hover (short intent
+//   (Clipboard, direct Link, Quote, Bullet list, Numbered list and Task list, an Edit group of Select all, Undo, Redo and Paste as plain text, Find, then Insert more and More edit) open below it; each submenu opens on hover (short intent
 //   delay) or with the Right arrow. Left closes a submenu, Escape closes the menu. Nothing the bar shows is repeated in the menu.
 // Rich view sends the same shortcuts Milkdown binds (checked in preset-commonmark and preset-gfm): Ctrl+B, Ctrl+I,
 // Ctrl+E, Ctrl+Alt+X, Ctrl+Alt+0..6, Ctrl+Alt+7/8, Ctrl+Alt+C, Ctrl+Shift+B. Task list, divider, link and clear
@@ -906,7 +906,7 @@ export function init(app) {
   // Grouped by what the user does, each group with a small heading and about six rows at most.
   // Copy and Paste are single clicks. Only items the app really supports are listed.
   // Source view edits plain text: only items that insert Markdown syntax or edit text, no block or mark commands.
-  function sourceModel(level, clip, direct) {
+  function sourceModel(level, clip, direct, editGroup) {
     // Block style (headings, quote, code block), inline marks and size live in the bar. Link, quote and the lists are direct rows.
     const line = [
       { label: 'Select line', icon: 'line', action: 'selectLine' },
@@ -914,26 +914,22 @@ export function init(app) {
       { label: 'Move line up', icon: 'up', action: 'lineUp' },
       { label: 'Move line down', icon: 'down', action: 'lineDown' },
     ]
-    const edit = [
-      { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
-      { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
-      { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
-      { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
-      { label: 'Word count', icon: 'count', action: 'wordcount' },
-    ]
     const table = { label: 'Table', icon: 'table', action: 'table' }
     const find = [{ label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }, { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' }]
+    const wc = { label: 'Word count', icon: 'count', action: 'wordcount' }
     if (level >= 1) {
       return [
         { head: 'Clipboard', noHead: true, items: level >= 2 ? [{ label: 'Clipboard', icon: 'paste', sub: clip }] : clip },
         { head: 'Insert', noHead: true, items: direct },
-        { head: 'Menu', noHead: true, items: [find[0], { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], { sep: true }, ...line, { sep: true }, ...edit] }] },
+        { head: 'Edit', noHead: true, items: editGroup },
+        { head: 'Menu', noHead: true, items: [find[0], { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], wc, { sep: true }, ...line] }] },
       ]
     }
     return [
       { head: 'Clipboard', items: clip },
       { head: 'Insert', items: direct },
-      { head: 'Menu', noHead: true, items: [find[0], { label: 'Line', icon: 'line', sub: line }, { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], { sep: true }, ...edit] }] },
+      { head: 'Edit', items: editGroup },
+      { head: 'Menu', noHead: true, items: [find[0], { label: 'Line', icon: 'line', sub: line }, { label: 'More', icon: 'insert', sub: [table, { sep: true }, find[1], wc] }] },
     ]
   }
 
@@ -952,30 +948,34 @@ export function init(app) {
       { label: 'Date and time', icon: 'calendar', kbd: 'Ctrl+Shift+D', action: 'datetime' },
       { label: 'Divider', icon: 'divider', action: 'divider' },
     ]
-    const edit = [
+    // The Edit group: four quick rows. Everything else that edits sits under a More row, once.
+    const editGroup = [
       { label: 'Select all', icon: 'selectall', kbd: 'Ctrl+A', action: 'selectAll' },
       { label: 'Undo', icon: 'reset', kbd: 'Ctrl+Z', action: 'undo' },
       { label: 'Redo', icon: 'redo', kbd: 'Ctrl+Y', action: 'redo' },
-      { sep: true },
       { label: 'Paste as plain text', icon: 'plain', kbd: 'Ctrl+Shift+V', action: 'pastePlain' },
+    ]
+    const editMore = [
       { label: 'Replace', icon: 'replace', kbd: 'Ctrl+H', action: 'replace' },
       { label: 'Word count', icon: 'count', action: 'wordcount' },
       { label: 'Clear formatting', icon: 'clear', action: 'clear' },
     ]
     const clip = [{ label: 'Cut', icon: 'cut', kbd: 'Ctrl+X', action: 'cut' }, { label: 'Copy', icon: 'copy', kbd: 'Ctrl+C', action: 'copy' }, { label: 'Paste', icon: 'paste', kbd: 'Ctrl+V', action: 'paste' }]
     const find = { label: 'Find', icon: 'search', kbd: 'Ctrl+F', action: 'find' }
-    if (src) return sourceModel(level, clip, direct)
+    if (src) return sourceModel(level, clip, direct, editGroup)
     if (level >= 1) {
       return [
         { head: 'Clipboard', noHead: true, items: level >= 2 ? [{ label: 'Clipboard', icon: 'paste', sub: clip }] : clip },
         { head: 'Insert', noHead: true, items: direct },
-        { head: 'Menu', noHead: true, items: [find, { label: 'More', icon: 'insert', sub: [...more, { sep: true }, ...edit] }] },
+        { head: 'Edit', noHead: true, items: editGroup },
+        { head: 'Menu', noHead: true, items: [find, { label: 'More', icon: 'insert', sub: [...more, { sep: true }, ...editMore] }] },
       ]
     }
     return [
       { head: 'Clipboard', items: clip },
       { head: 'Insert', items: direct },
-      { head: 'Menu', noHead: true, items: [find, { label: 'Insert more', icon: 'insert', sub: more }, { label: 'Edit', icon: 'selectall', sub: edit }] },
+      { head: 'Edit', items: editGroup },
+      { head: 'Menu', noHead: true, items: [find, { label: 'Insert more', icon: 'insert', sub: more }, { label: 'More edit', icon: 'selectall', sub: editMore }] },
     ]
   }
 
