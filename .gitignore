@@ -3,3 +3,5 @@ dist/
 release/
 graphify-out/
 .env
+Thumbs.db
+.DS_Store

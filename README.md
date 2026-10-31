@@ -152,6 +152,11 @@ Notepad is the small, fast text editor that comes with Windows, and it is the ri
 
 Notepad opens faster and takes far less disk space and memory. Plume is for the files Notepad does not render.
 
+## Usage
+
+- **Open a file:** press **`Ctrl+O`**, drop it on the window, or open it with Plume from your file manager. Open documents stay in the left bar.
+- **Open a folder:** press **`Ctrl+Shift+O`**. Search inside it with **`Ctrl+Shift+F`**.
+- **Settings:** press **`Ctrl+,`**. Themes, fonts, sizes, widths and the update check (Files, Updates) are all in the Settings page, and the full shortcut list is under Shortcuts there.
 
 ## Install
 

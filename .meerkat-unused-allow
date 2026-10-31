@@ -1,0 +1,3 @@
+electron/themes-ipc.cjs
+src/modules/xlsxworker.js
+tools/plume-mcp/server.mjs
