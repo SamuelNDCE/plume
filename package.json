@@ -43,6 +43,11 @@
     "appId": "dev.plume.app",
     "productName": "Plume",
     "copyright": "Copyright (c) 2026 Samuel",
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false
+    },
     "directories": {
       "output": "release"
     },
