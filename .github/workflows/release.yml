@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Two release runs for the same ref never overlap, and a running one is never cancelled half way.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -55,6 +60,7 @@ jobs:
             release/Plume-*
             release/latest*.yml
           if-no-files-found: error
+          retention-days: 7
 
   publish:
     needs: build
