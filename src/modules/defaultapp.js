@@ -13,6 +13,15 @@ export function init(app) {
   const api = window.folio
   if (!api || api.platform !== 'win32' || !api.openDefaultApps) return
   if (app.settings.get('defaultAppPrompted')) return
+  // Already the default for .md: never ask. Remember it, so the check does not even run again.
+  const known = api.isDefaultApp ? api.isDefaultApp().catch(() => false) : Promise.resolve(false)
+  known.then((isDefault) => {
+    if (isDefault) app.settings.set('defaultAppPrompted', true)
+    else if (!app.settings.get('defaultAppPrompted')) show(app, api)
+  })
+}
+
+function show(app, api) {
   const bubble = el('div', 'default-bar')
   bubble.setAttribute('role', 'region')
   bubble.setAttribute('aria-label', 'Default app')
