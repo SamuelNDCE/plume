@@ -304,7 +304,7 @@ function rerenderAll() {
           if (el.isConnected && node?.dataset?.kind) {
             el.innerHTML = node.innerHTML
           }
-        })
+        }).catch((e) => console.warn('block render failed, left as it was', e))
       }
     })
   })
