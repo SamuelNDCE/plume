@@ -42,6 +42,7 @@
   "build": {
     "appId": "dev.plume.app",
     "productName": "Plume",
+    "copyright": "Copyright (c) 2026 Samuel",
     "directories": {
       "output": "release"
     },
