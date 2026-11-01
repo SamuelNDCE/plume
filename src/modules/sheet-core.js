@@ -746,7 +746,6 @@ const FUNCS = {
     },
   },
 }
-export const FUNCTION_NAMES = Object.keys(FUNCS)
 
 // Evaluate a standalone grid (handy for tests): rows is string[][].
 export function evaluateGrid(rows) {

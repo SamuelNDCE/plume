@@ -196,7 +196,6 @@ export function commitSaved(d, bytes) {
   d.bytes = bytes
 }
 
-export const hasEdits = (d) => isDirty(st(d))
 
 /* ---------- the editor attached to one viewer ---------- */
 class Editor {

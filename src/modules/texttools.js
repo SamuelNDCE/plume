@@ -2,7 +2,6 @@
 // and the line-ending / encoding pickers behind the status bar chips.
 // File format itself (detect on open, preserve on save) lives in electron/textio.cjs and src/main.js.
 
-export const EOL_LABEL = { crlf: 'CRLF', lf: 'LF', cr: 'CR' }
 export const EOL_NAME = { crlf: 'Windows (CRLF)', lf: 'Unix (LF)', cr: 'Classic Mac (CR)' }
 export const ENC_LABEL = { 'utf-8': 'UTF-8', 'utf-8-bom': 'UTF-8 with BOM', 'utf-16le': 'UTF-16 LE', 'utf-16be': 'UTF-16 BE', 'windows-1252': 'ANSI (Windows-1252)' }
 // Code pages a file can be reopened as. Multi-byte ones open read-only (saving them is refused).
