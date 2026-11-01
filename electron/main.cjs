@@ -17,7 +17,7 @@ const devOrigin = isDev ? new URL(process.env.VITE_DEV_URL).origin : null
 const isOwnPage = (url) => {
   try {
     const u = new URL(url)
-    if (u.protocol === 'file:') return path.normalize(decodeURIComponent(u.pathname.replace(/^\/([A-Za-z]:)/, '$1'))).toLowerCase() === path.normalize(appFile).toLowerCase()
+    if (u.protocol === 'file:') return !u.hostname && path.normalize(decodeURIComponent(u.pathname.replace(/^\/([A-Za-z]:)/, '$1'))).toLowerCase() === path.normalize(appFile).toLowerCase()
     return !!devOrigin && u.origin === devOrigin
   } catch {
     return false
