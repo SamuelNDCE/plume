@@ -1,12 +1,6 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const inv = (ch) => (...a) => ipcRenderer.invoke(ch, ...a)
-// Listens on a channel and returns a function that removes exactly that listener again.
-const subscribe = (ch, cb) => {
-  const h = (_e, v) => cb(v)
-  ipcRenderer.on(ch, h)
-  return () => ipcRenderer.removeListener(ch, h)
-}
 
 contextBridge.exposeInMainWorld('folio', {
   openDialog: inv('file:open-dialog'),
@@ -23,7 +17,7 @@ contextBridge.exposeInMainWorld('folio', {
   trashFile: inv('file:trash'),
   searchStart: (id, dir, query, opts) => ipcRenderer.send('folder:search-start', id, dir, query, opts),
   searchCancel: () => ipcRenderer.send('folder:search-cancel'),
-  onSearchBatch: (cb) => subscribe('folder:search-batch', cb),
+  onSearchBatch: (cb) => { const h = (_e, v) => cb(v); ipcRenderer.on('folder:search-batch', h); return () => ipcRenderer.removeListener('folder:search-batch', h) },
   stat: inv('file:stat'),
   // Takes File objects only (a File cannot be forged with a disk path), turns them into paths here, and asks main to grant them.
   grantDropped: (files) => {
@@ -35,7 +29,7 @@ contextBridge.exposeInMainWorld('folio', {
   downloadUpdate: inv('update:download'),
   installUpdate: inv('update:install'),
   openReleases: inv('update:releases'),
-  onUpdateStatus: (cb) => subscribe('update:status', cb),
+  onUpdateStatus: (cb) => { const h = (_e, v) => cb(v); ipcRenderer.on('update:status', h); return () => ipcRenderer.removeListener('update:status', h) },
   listUserThemes: inv('themes:list'),
   openThemesFolder: inv('themes:open-folder'),
   listPlugins: inv('plugins:list'),
@@ -55,5 +49,5 @@ contextBridge.exposeInMainWorld('folio', {
   openDefaultApps: inv('app:open-default-apps'),
   // Native paste into the focused field (takes no argument, so the renderer cannot pass data through it).
   paste: () => ipcRenderer.send('edit:paste'),
-  onOpenPath: (cb) => subscribe('open-path', cb),
+  onOpenPath: (cb) => { const h = (_e, v) => cb(v); ipcRenderer.on('open-path', h); return () => ipcRenderer.removeListener('open-path', h) },
 })
