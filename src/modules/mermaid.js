@@ -321,7 +321,7 @@ export function crepeConfig() {
         if (app?.blocks?.has(lang)) {
           const out = runBlock(lang, content)
           if (out && typeof out.then === 'function') {
-            out.then(applyPreview)
+            out.then(applyPreview).catch((e) => console.warn('block preview failed', e))
             return undefined
           }
           return out
