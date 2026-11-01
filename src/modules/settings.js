@@ -708,7 +708,7 @@ export function init(app) {
     const ver = el('div', 'st-muted', 'Version')
     f.appendChild(ver)
     try {
-      window.folio.getUpdateState().then((u) => { ver.textContent = 'Version ' + (u && u.current ? u.current : '') })
+      window.folio.getUpdateState().then((u) => { ver.textContent = 'Version ' + (u && u.current ? u.current : '') }).catch(() => { ver.textContent = 'Version' })
     } catch {}
     f.appendChild(secUpdates())
     f.appendChild(el('p', null, 'Free and open source. No telemetry.'))
