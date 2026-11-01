@@ -9,6 +9,32 @@ const grantQuiet = (p, opts) => { try { grants.grant(p, opts) } catch {} }
 const need = grants.assert
 
 const isDev = !!process.env.VITE_DEV_URL
+
+// Only the app's own file (and, in development, the dev server's exact origin) may load in the window.
+// A prefix check let http://localhost.evil.com and any file: URL through; compare parsed values instead.
+const appFile = path.join(__dirname, '..', 'dist', 'index.html')
+const devOrigin = isDev ? new URL(process.env.VITE_DEV_URL).origin : null
+const isOwnPage = (url) => {
+  try {
+    const u = new URL(url)
+    if (u.protocol === 'file:') return path.normalize(decodeURIComponent(u.pathname.replace(/^\/([A-Za-z]:)/, '$1'))).toLowerCase() === path.normalize(appFile).toLowerCase()
+    return !!devOrigin && u.origin === devOrigin
+  } catch {
+    return false
+  }
+}
+// An IPC message is only answered when it comes from the app's own page. This is defence in depth: plugins run in the same
+// page and are not sandboxed, so this does not stop plugin code.
+const fromAppPage = (e) => isOwnPage(e.senderFrame ? e.senderFrame.url : e.sender.getURL())
+const ipc = {
+  handle: (ch, fn) => ipcMain.handle(ch, (e, ...a) => {
+    if (!fromAppPage(e)) throw new Error('Refused: ' + ch + ' was called from outside the app page')
+    return fn(e, ...a)
+  }),
+  on: (ch, fn) => ipcMain.on(ch, (e, ...a) => {
+    if (fromAppPage(e)) fn(e, ...a)
+  }),
+}
 // QA hooks (PLUME_STEPS, PLUME_SMOKE, PLUME_USER_DATA, PLUME_SEARCH_LOG) only run outside a packaged build.
 const QA = !app.isPackaged
 const MD_EXT = new Set(['.md', '.markdown', '.mdown', '.mkd'])
@@ -89,19 +115,6 @@ function createWindow() {
   win.webContents.session.webRequest.onHeadersReceived((details, cb) => {
     cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CSP] } })
   })
-  // Only the app's own file (and, in development, the dev server's exact origin) may load in the window.
-  // A prefix check let http://localhost.evil.com and any file: URL through; compare parsed values instead.
-  const appFile = path.join(__dirname, '..', 'dist', 'index.html')
-  const devOrigin = isDev ? new URL(process.env.VITE_DEV_URL).origin : null
-  const isOwnPage = (url) => {
-    try {
-      const u = new URL(url)
-      if (u.protocol === 'file:') return path.normalize(decodeURIComponent(u.pathname.replace(/^\/([A-Za-z]:)/, '$1'))).toLowerCase() === path.normalize(appFile).toLowerCase()
-      return !!devOrigin && u.origin === devOrigin
-    } catch {
-      return false
-    }
-  }
   win.webContents.on('will-navigate', (e, url) => {
     if (!isOwnPage(url)) {
       e.preventDefault()
@@ -180,7 +193,7 @@ const mdFilters = [
 ]
 
 const pdfFilters = [{ name: 'PDF', extensions: ['pdf'] }, { name: 'All files', extensions: ['*'] }]
-ipcMain.handle('file:open-dialog', async (_e, kind) => {
+ipc.handle('file:open-dialog', async (_e, kind) => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: kind === 'pdf' ? pdfFilters : mdFilters })
   if (r.canceled) return []
   r.filePaths.forEach((p) => grantQuiet(p))
@@ -189,7 +202,7 @@ ipcMain.handle('file:open-dialog', async (_e, kind) => {
 // The ONE grant a renderer can ask for: files dropped on the window (paths from webUtils.getPathForFile).
 // A drop is a user gesture the main process cannot see, so it is accepted on trust. Only existing regular files,
 // never folders, so page code cannot widen access to a whole directory this way.
-ipcMain.handle('grant:dropped', (_e, paths) => {
+ipc.handle('grant:dropped', (_e, paths) => {
   const out = []
   for (const p of Array.isArray(paths) ? paths.slice(0, 50) : []) {
     try {
@@ -199,7 +212,7 @@ ipcMain.handle('grant:dropped', (_e, paths) => {
   return out // the paths that were granted
 })
 // opts.maxBytes reads only the start of a file (the read-only preview of a very large one), cut back to a whole line.
-ipcMain.handle('file:read', (_e, p, opts = {}) => {
+ipc.handle('file:read', (_e, p, opts = {}) => {
   need(p)
   const size = fs.statSync(p).size
   let buf
@@ -214,7 +227,7 @@ ipcMain.handle('file:read', (_e, p, opts = {}) => {
   return { path: p, name: path.basename(p), size, truncated: buf.length < size, binary: d.binary, content: d.content, encoding: d.encoding, eol: d.eol, mixedEol: d.mixedEol }
 })
 // Log follow: the whole lines added after byte offset `from` (a half-written last line waits for its newline).
-ipcMain.handle('file:read-tail', (_e, p, from, encoding) => {
+ipc.handle('file:read-tail', (_e, p, from, encoding) => {
   need(p)
   const st = fs.statSync(p)
   const base = { size: st.size, mtimeMs: st.mtimeMs, consumed: from, content: '' }
@@ -233,21 +246,21 @@ ipcMain.handle('file:read-tail', (_e, p, from, encoding) => {
   try { d = textio.decodeAs(buf, label) } catch { d = textio.decodeAs(buf, 'utf-8') }
   return { ...base, content: d.content, consumed: from + buf.length }
 })
-ipcMain.handle('file:create', (_e, dir, name) => {
+ipc.handle('file:create', (_e, dir, name) => {
   const dest = path.join(dir, name)
   need(dest)
   if (fs.existsSync(dest)) throw new Error('exists')
   fs.writeFileSync(dest, '', { flag: 'wx' }) // wx: fails if the file appeared since the check, never truncates an existing one
   return dest
 })
-ipcMain.handle('file:rename', (_e, from, to) => {
+ipc.handle('file:rename', (_e, from, to) => {
   need(from)
   need(to)
   if (fs.existsSync(to)) throw new Error('exists')
   fs.renameSync(from, to)
   return to
 })
-ipcMain.handle('file:trash', async (_e, p) => {
+ipc.handle('file:trash', async (_e, p) => {
   need(p)
   await shell.trashItem(p)
   return true
@@ -265,8 +278,8 @@ const stopSearch = () => {
   w.on('error', () => {})
   w.terminate()
 }
-ipcMain.on('folder:search-cancel', () => stopSearch())
-ipcMain.on('folder:search-start', (e, id, dir, query, opts) => {
+ipc.on('folder:search-cancel', () => stopSearch())
+ipc.on('folder:search-start', (e, id, dir, query, opts) => {
   stopSearch()
   const sender = e.sender
   const send = (m) => { if (!sender.isDestroyed()) sender.send('folder:search-batch', { id, ...m }) }
@@ -304,41 +317,41 @@ ipcMain.on('folder:search-start', (e, id, dir, query, opts) => {
     send({ hits: [], done: true, failed: true })
   }
 })
-ipcMain.handle('file:write', (_e, p, content, fmt = {}) => {
+ipc.handle('file:write', (_e, p, content, fmt = {}) => {
   need(p)
   if (typeof content !== 'string') throw new Error('nothing to write') // never write "undefined" or an object over a file
   writeAtomic(p, textio.encode(content, fmt.encoding, fmt.eol)) // temp file + rename: a failed write leaves the original intact
   return true
 })
 // Binary save (the Excel viewer): same grant check as file:write, written to a temp file then renamed so a crash never leaves a half file.
-ipcMain.handle('file:write-bytes', (_e, p, bytes) => {
+ipc.handle('file:write-bytes', (_e, p, bytes) => {
   need(p)
   if (!(bytes instanceof Uint8Array) || !bytes.length) throw new Error('nothing to write')
   // Same atomic path as text saves: a random temp name opened exclusively, then renamed over the target.
   writeAtomic(p, Buffer.from(bytes))
   return true
 })
-ipcMain.handle('file:save-dialog', async (_e, suggested, kind) => {
+ipc.handle('file:save-dialog', async (_e, suggested, kind) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: suggested || 'Untitled.md', filters: kind === 'pdf' ? pdfFilters : mdFilters })
   if (r.canceled) return null
   grantQuiet(r.filePath)
   return r.filePath
 })
-ipcMain.handle('folder:open-dialog', async () => {
+ipc.handle('folder:open-dialog', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
   if (r.canceled) return null
   grantQuiet(r.filePaths[0], { folder: true })
   return r.filePaths[0]
 })
-ipcMain.handle('folder:tree', (_e, dir) => {
+ipc.handle('folder:tree', (_e, dir) => {
   need(dir, { folder: true })
   return { root: dir, name: path.basename(dir), children: readDirTree(dir) }
 })
-ipcMain.handle('file:reveal', (_e, p) => {
+ipc.handle('file:reveal', (_e, p) => {
   need(p)
   return shell.showItemInFolder(p)
 })
-ipcMain.handle('file:stat', (_e, p) => {
+ipc.handle('file:stat', (_e, p) => {
   need(p)
   try {
     const st = fs.statSync(p)
@@ -349,14 +362,14 @@ ipcMain.handle('file:stat', (_e, p) => {
 })
 // Whole-file bytes for the PDF, Word and Excel viewers. Capped so one request cannot exhaust memory.
 const BYTES_MAX = 512 * 1024 * 1024
-ipcMain.handle('file:read-bytes', (_e, p) => {
+ipc.handle('file:read-bytes', (_e, p) => {
   need(p)
   const st = fs.statSync(p)
   if (!st.isFile()) throw new Error('not a file')
   if (st.size > BYTES_MAX) throw new Error('file too large to open')
   return fs.readFileSync(p)
 })
-ipcMain.handle('file:read-image', (_e, p) => {
+ipc.handle('file:read-image', (_e, p) => {
   need(p)
   try {
     const ext = path.extname(p).slice(1).toLowerCase().replace('jpg', 'jpeg').replace('svg', 'svg+xml')
@@ -365,7 +378,7 @@ ipcMain.handle('file:read-image', (_e, p) => {
     return null
   }
 })
-ipcMain.handle('file:save-image', (_e, dir, name, base64) => {
+ipc.handle('file:save-image', (_e, dir, name, base64) => {
   // A plain file name only: no separators, no '..', no drive letters. Nothing from the page can write outside assets/.
   if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(name) || name.includes('..')) throw new Error('bad image name')
   const out = path.join(dir, 'assets')
@@ -376,26 +389,26 @@ ipcMain.handle('file:save-image', (_e, dir, name, base64) => {
   fs.writeFileSync(dest, Buffer.from(base64, 'base64'), { flag: 'wx' }) // never overwrite an image that is already there
   return 'assets/' + name
 })
-ipcMain.handle('export:html', async (_e, html, suggested) => {
+ipc.handle('export:html', async (_e, html, suggested) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: suggested, filters: [{ name: 'HTML', extensions: ['html'] }] })
   if (r.canceled) return null
   fs.writeFileSync(r.filePath, html, 'utf8')
   return r.filePath
 })
-ipcMain.handle('export:pdf', async (_e, suggested) => {
+ipc.handle('export:pdf', async (_e, suggested) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
   if (r.canceled) return null
   const data = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
   fs.writeFileSync(r.filePath, data)
   return r.filePath
 })
-ipcMain.handle('app:take-pending-open', () => {
+ipc.handle('app:take-pending-open', () => {
   const p = pendingOpen
   pendingOpen = null
   return p || null
 })
-ipcMain.handle('app:set-title', (_e, t) => win && win.setTitle(t))
-ipcMain.handle('app:set-theme-bg', (_e, color, dark) => {
+ipc.handle('app:set-title', (_e, t) => win && win.setTitle(t))
+ipc.handle('app:set-theme-bg', (_e, color, dark) => {
   if (!win) return
   win.setBackgroundColor(color)
   nativeTheme.themeSource = dark ? 'dark' : 'light'
@@ -403,14 +416,14 @@ ipcMain.handle('app:set-theme-bg', (_e, color, dark) => {
     fs.writeFileSync(bgFile(), JSON.stringify({ color, dark: !!dark }))
   } catch {}
 })
-ipcMain.handle('app:confirm', async (_e, message, detail, buttons) => {
+ipc.handle('app:confirm', async (_e, message, detail, buttons) => {
   const r = await dialog.showMessageBox(win, { type: 'question', message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
   return r.response
 })
-ipcMain.handle('app:devtools', () => win && win.webContents.toggleDevTools())
+ipc.handle('app:devtools', () => win && win.webContents.toggleDevTools())
 // The one non-web link that leaves the app: the Windows Default apps page. A fixed string, nothing from the renderer, Windows only.
-ipcMain.on('edit:paste', (e) => e.sender.paste())
-ipcMain.handle('app:open-default-apps', async () => {
+ipc.on('edit:paste', (e) => e.sender.paste())
+ipc.handle('app:open-default-apps', async () => {
   if (process.platform !== 'win32') return false
   try {
     await shell.openExternal('ms-settings:defaultapps?registeredAppUser=Plume')
@@ -437,9 +450,9 @@ else {
     // Reload what the user opened before, so restored tabs and the last folder still open. Then the file the OS launched us with.
     grants.configure(path.join(app.getPath('userData'), 'grants.json'))
     if (pendingOpen) grantQuiet(pendingOpen)
-    pluginsIpc && pluginsIpc.register({ app, ipcMain, shell, protocol: require('electron').protocol })
-    themesIpc && themesIpc.register({ app, ipcMain, shell })
-    updaterIpc && updaterIpc.register({ app, ipcMain, shell, getWindow: () => win })
+    pluginsIpc && pluginsIpc.register({ app, ipcMain: ipc, shell, protocol: require('electron').protocol })
+    themesIpc && themesIpc.register({ app, ipcMain: ipc, shell })
+    updaterIpc && updaterIpc.register({ app, ipcMain: ipc, shell, getWindow: () => win })
     createWindow()
   }).catch((e) => { console.error('startup failed', e); app.quit() })
   app.on('window-all-closed', () => app.quit())
