@@ -441,6 +441,6 @@ else {
     themesIpc && themesIpc.register({ app, ipcMain, shell })
     updaterIpc && updaterIpc.register({ app, ipcMain, shell, getWindow: () => win })
     createWindow()
-  })
+  }).catch((e) => { console.error('startup failed', e); app.quit() })
   app.on('window-all-closed', () => app.quit())
 }
