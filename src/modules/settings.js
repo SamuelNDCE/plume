@@ -121,12 +121,12 @@ export function init(app) {
       try {
         const l = app.themes && app.themes.list && app.themes.list()
         if (Array.isArray(l) && l.length) return l
-      } catch {}
+      } catch { /* theme list unavailable: use the built-in fallback below */ }
       return FALLBACK_THEMES
     }
     const pick = (id) => {
       if (app.themes && app.themes.apply) {
-        try { app.themes.apply(id) } catch {}
+        try { app.themes.apply(id) } catch { app.toast && app.toast('Could not apply that theme') }
       }
       if (S.get('theme') !== id) S.set('theme', id)
     }
@@ -188,12 +188,12 @@ export function init(app) {
       try {
         const off = app.themes.onChange(() => { if (overlay) { drawGallery() } })
         if (typeof off === 'function') cleanups.push(off)
-      } catch {}
+      } catch { /* theme change events unavailable: the list just will not live-update */ }
     }
     const tools = el('div', 'st-presets')
     tools.append(
-      btn('Open themes folder', '', () => { try { window.folio.openThemesFolder() } catch {} }),
-      btn('Reload custom themes', '', () => { try { app.commands.run('theme.reload') } catch {} })
+      btn('Open themes folder', '', () => { try { window.folio.openThemesFolder() } catch { app.toast && app.toast('Could not open the themes folder') } }),
+      btn('Reload custom themes', '', () => { try { app.commands.run('theme.reload') } catch { app.toast && app.toast('Could not reload the themes') } })
     )
     const hint = el('div', 'st-desc', 'Drop a theme .json or .css file into the themes folder. See docs/THEMES.md for the format.')
     g.append(gallery, tools, hint)
@@ -369,7 +369,7 @@ export function init(app) {
           sw.setAttribute('aria-checked', String(on))
           note.hidden = false
           app.toast('Restart Plume to apply')
-          if (app.plugins && typeof app.plugins.reload === 'function') { try { app.plugins.reload() } catch {} }
+          if (app.plugins && typeof app.plugins.reload === 'function') { try { app.plugins.reload() } catch { /* the restart toast above already tells the user to restart */ } }
         })
         top.append(nm, sw)
         card.appendChild(top)
@@ -384,7 +384,7 @@ export function init(app) {
       }
     }
     tools.append(
-      btn('Open plugins folder', '', () => { try { api.openPluginsFolder() } catch {} }),
+      btn('Open plugins folder', '', () => { try { api.openPluginsFolder() } catch { app.toast && app.toast('Could not open the plugins folder') } }),
       btn('Refresh list', '', draw)
     )
     const consentText = el('span', 'st-muted')
@@ -558,7 +558,7 @@ export function init(app) {
     })
     g2.append(
       row('Clear recent files', 'Forget the list of recently opened files.', btn('Clear', '', () => {
-        try { localStorage.removeItem('folio.recent') } catch {}
+        try { localStorage.removeItem('folio.recent') } catch { /* storage blocked: nothing stored to clear */ }
         app.toast('Recent files cleared')
       })),
       row('Hidden recent files', 'Files you removed from the recent list with the x button.', hiddenWrap),
@@ -569,7 +569,7 @@ export function init(app) {
         } catch { r = 0 }
         if (r !== 0) return
         for (const k of Object.keys(DEFAULTS)) if (k !== 'defaultAppPrompted' && k !== 'hiddenRecents' && k !== 'pluginsConsent') S.set(k, DEFAULTS[k])
-        if (app.themes && app.themes.apply) { try { app.themes.apply('light') } catch {} }
+        if (app.themes && app.themes.apply) { try { app.themes.apply('light') } catch { /* the settings reset continues; the theme stays as it is */ } }
         app.toast('Settings reset')
       }))
     )
@@ -709,7 +709,7 @@ export function init(app) {
     f.appendChild(ver)
     try {
       window.folio.getUpdateState().then((u) => { ver.textContent = 'Version ' + (u && u.current ? u.current : '') }).catch(() => { ver.textContent = 'Version' })
-    } catch {}
+    } catch { /* About still opens; the version line stays as 'Version' */ }
     f.appendChild(secUpdates())
     f.appendChild(el('p', null, 'Free and open source. No telemetry.'))
     f.appendChild(el('div', 'st-muted', 'Released under the MIT licence.'))
@@ -721,7 +721,7 @@ export function init(app) {
 
   function show(name) {
     current = name
-    cleanups.forEach((fn) => { try { fn() } catch {} })
+    cleanups.forEach((fn) => { try { fn() } catch { /* one failing cleanup must not stop the others */ } })
     cleanups = []
     refreshers = []
     content.textContent = ''
@@ -796,13 +796,13 @@ export function init(app) {
     if (!overlay) return
     const o = overlay
     overlay = null
-    cleanups.forEach((fn) => { try { fn() } catch {} })
+    cleanups.forEach((fn) => { try { fn() } catch { /* one failing cleanup must not stop the others */ } })
     cleanups = []
     refreshers = []
     o.classList.remove('in')
     if (reduced()) o.remove()
     else setTimeout(() => o.remove(), 150)
-    if (prevFocus && prevFocus.focus) try { prevFocus.focus() } catch {}
+    if (prevFocus && prevFocus.focus) try { prevFocus.focus() } catch { /* the element was removed: focus stays where it is */ }
   }
 
   app.bus.on('settings:change', (e) => {

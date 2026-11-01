@@ -102,7 +102,7 @@ function claimPane() {
 // Whether the user left the page list hidden, remembered across PDFs and restarts.
 const MIN_KEY = 'plume.pdfPagesHidden'
 let pagesMin = false
-try { pagesMin = localStorage.getItem(MIN_KEY) === '1' } catch {}
+try { pagesMin = localStorage.getItem(MIN_KEY) === '1' } catch { /* storage blocked: keep the default (list shown) */ }
 let settling = false
 let minObs = null
 function watchMin() {
@@ -113,7 +113,7 @@ function watchMin() {
     const off = b.contains('pages-off')
     if (off === pagesMin) return
     pagesMin = off
-    try { localStorage.setItem(MIN_KEY, off ? '1' : '0') } catch {}
+    try { localStorage.setItem(MIN_KEY, off ? '1' : '0') } catch { /* storage blocked: the choice just is not remembered */ }
   })
   minObs.observe(document.body, { attributes: true, attributeFilter: ['class'] })
 }
@@ -308,7 +308,7 @@ class Thumbs {
     it.tok++
     it.job = false
     if (it.task) {
-      try { it.task.cancel() } catch {}
+      try { it.task.cancel() } catch { /* already finished or cancelled */ }
       it.task = null
     }
     if (it.canvas) {
@@ -1097,11 +1097,11 @@ class PdfViewer {
     const pg = this.pages[i]
     pg.token++
     if (pg.renderTask) {
-      try { pg.renderTask.cancel() } catch {}
+      try { pg.renderTask.cancel() } catch { /* already finished or cancelled */ }
       pg.renderTask = null
     }
     if (pg.tl) {
-      try { pg.tl.cancel() } catch {}
+      try { pg.tl.cancel() } catch { /* already finished or cancelled */ }
       pg.tl = null
     }
     if (pg.canvas) {
@@ -1133,10 +1133,10 @@ class PdfViewer {
     if (pg.job) {
       pg.token++
       if (pg.renderTask) {
-        try { pg.renderTask.cancel() } catch {}
+        try { pg.renderTask.cancel() } catch { /* already finished or cancelled */ }
       }
       if (pg.tl) {
-        try { pg.tl.cancel() } catch {}
+        try { pg.tl.cancel() } catch { /* already finished or cancelled */ }
       }
     }
     pg.job = true
@@ -1191,7 +1191,7 @@ class PdfViewer {
       textEl.style.setProperty('--total-scale-factor', String(scale))
       const tl = new this.lib.TextLayer({ textContentSource: page.streamTextContent(), container: textEl, viewport: vp })
       if (pg.tl) {
-        try { pg.tl.cancel() } catch {}
+        try { pg.tl.cancel() } catch { /* already finished or cancelled */ }
       }
       pg.tl = tl
       await tl.render()
@@ -1420,8 +1420,8 @@ class PdfViewer {
     this.task = null
     this.pdf = null
     // destroying the loading task also destroys the document (PDFDocumentProxy.destroy) and its worker
-    try { pdf && pdf.destroy() } catch {}
-    try { task && task.destroy() } catch {}
+    try { pdf && pdf.destroy() } catch { /* already destroyed */ }
+    try { task && task.destroy() } catch { /* already destroyed */ }
   }
 
   destroy() {
@@ -1434,7 +1434,7 @@ class PdfViewer {
     clearTimeout(this.zoomTimer)
     this.clearHighlights()
     for (const f of this.cleanups.splice(0)) {
-      try { f() } catch {}
+      try { f() } catch { /* one failing cleanup must not stop the others */ }
     }
     if (this.ed) this.ed.destroy()
     this.ed = null
