@@ -1155,6 +1155,7 @@ export async function mount(host, d, app) {
     if (!editable || !q || !sh || !f.hits.length) return
     const src = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const re = new RegExp(src, 'gi')
+    const hasMatch = new RegExp(src, 'i')
     const rep = f.rin.value
     const changes = []
     for (const k of all ? f.hits : [f.hits[f.idx]]) {
@@ -1162,7 +1163,7 @@ export async function mount(host, d, app) {
       const c = k % KEY
       const old = cellVal(sh, r, c) ?? null
       const text = fmtFull(old)
-      if (!text || !new RegExp(src, 'i').test(text)) continue
+      if (!text || !hasMatch.test(text)) continue
       changes.push({ si: S.active, r, c, old, nw: parseTyped(text.replace(re, () => rep)) })
     }
     commitChanges(changes)
