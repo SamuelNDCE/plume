@@ -435,8 +435,10 @@ ipc.handle('app:open-default-apps', async () => {
 
 // Is Plume already the app Windows opens .md files with? Reads the user's choice for .md and the program that choice launches.
 // Fixed arguments only, no renderer input; any failure answers false, so the prompt can still appear.
+// reg.exe by its full path in the Windows folder, never found through PATH or the current folder.
+const REG_EXE = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe')
 const regValue = (key, name) => new Promise((resolve) => {
-  require('node:child_process').execFile('reg.exe', ['query', key, ...(name ? ['/v', name] : ['/ve'])], { windowsHide: true, timeout: 4000 }, (err, out) => {
+  require('node:child_process').execFile(REG_EXE, ['query', key, ...(name ? ['/v', name] : ['/ve'])], { windowsHide: true, timeout: 4000 }, (err, out) => {
     if (err) return resolve('')
     const m = /REG_(?:EXPAND_)?SZ\s+(.+?)\s*$/m.exec(String(out))
     resolve(m ? m[1] : '')
