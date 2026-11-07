@@ -4,8 +4,6 @@ All notable changes to Plume are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
-## [5.6.0] - 2026-11-07
-
 ### Fixed
 - Folder search and the folder tree skip folders the grant does not cover (for example userData inside a granted folder).
 
