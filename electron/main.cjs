@@ -184,7 +184,9 @@ async function listDir(dir) {
   for (const e of entries) {
     if (skipEntry(e.name)) continue
     const full = path.join(dir, e.name)
-    if (e.isDirectory()) dirs.push({ name: e.name, path: full, dir: true, children: null })
+    if (e.isDirectory()) {
+      if (allowedDir(full)) dirs.push({ name: e.name, path: full, dir: true, children: null })
+    }
     else if (OPENABLE(e.name)) files.push({ name: e.name, path: full, dir: false })
   }
   const byName = (a, b) => a.name.localeCompare(b.name)
@@ -199,6 +201,14 @@ async function listDir(dir) {
 const MAX_FIND = 300
 const MAX_FIND_DIRS = 20000
 const FIND_MS = 3000
+// True when the grant covers this folder. A file inside an allowed folder is allowed too, so the check runs once per folder.
+function allowedDir(full) {
+  try {
+    return grants.isGranted(full, { folder: true })
+  } catch {
+    return false
+  }
+}
 async function findNames(root, query) {
   const q = String(query || '').toLowerCase()
   const hits = []
@@ -222,8 +232,10 @@ async function findNames(root, query) {
     for (const e of entries) {
       if (skipEntry(e.name) || e.isSymbolicLink()) continue
       const full = path.join(dir, e.name)
-      if (e.isDirectory()) queue.push(full)
-      else if (OPENABLE(e.name) && e.name.toLowerCase().includes(q)) hits.push({ name: e.name, path: full, dir: false })
+      if (e.isDirectory()) {
+        // Descend only into folders the grant covers (userData, sensitive dotfolders and anything outside the grant are refused).
+        if (allowedDir(full)) queue.push(full)
+      } else if (OPENABLE(e.name) && e.name.toLowerCase().includes(q)) hits.push({ name: e.name, path: full, dir: false })
       if (hits.length >= MAX_FIND) break
     }
     await new Promise((r) => setImmediate(r))
