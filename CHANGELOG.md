@@ -4,7 +4,21 @@ All notable changes to Plume are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
-Nothing yet.
+## [0.6.0] - 2026-11-07
+
+### Added
+- HTML files open in a Rich view (the page, drawn in a sandboxed frame with scripts off and local CSS and images inlined) and a Source view. Switch with the Rich/Source control or Ctrl+/.
+- The sidebar filter and Quick Open search the whole folder by name, including folders not yet opened.
+
+### Changed
+- Folders load one level at a time and show up to 2,000 entries each. Folders start closed.
+- Markdown over 2 MB opens in Source view. Files over 2 MB skip syntax highlighting, so they open in about 2 s instead of about 11 s.
+- The session backup no longer serialises unsaved text over 512 KB, and a failed backup no longer loses the whole session silently.
+- The default-app prompt stays off when Windows opens any file type Plume registers with Plume.
+
+### Fixed
+- Whole-file reads over 128 MB are refused in the main process instead of loading into memory.
+- A failed folder refresh after moving a file to the Recycle Bin is no longer an unhandled rejection.
 
 ## [0.5.5] - 2026-10-30
 

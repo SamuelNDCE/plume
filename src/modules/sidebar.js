@@ -20,7 +20,7 @@ export function init(app) {
   const sideEl = $('#sidebar')
   if (!tabsEl || !filesPane || !sideEl) return
 
-  const collapsed = new Set() // folder paths the user collapsed
+  const expanded = new Set() // folder paths the user opened (folders start closed: their children load on open)
   let pending = null // { mode: 'create', dir } | { mode: 'rename', path }
   let filterText = ''
   let refreshTimer = null
@@ -194,19 +194,6 @@ export function init(app) {
   }
 
   /* ---------- folder tree ---------- */
-  // Keeps files whose name matches q, and folders that match or contain a match.
-  function pruneList(list, q) {
-    const out = []
-    for (const n of list) {
-      const self = n.name.toLowerCase().includes(q)
-      if (n.dir) {
-        const kids = pruneList(n.children || [], q)
-        if (kids.length || self) out.push({ ...n, children: kids })
-      } else if (self) out.push(n)
-    }
-    return out
-  }
-
   function inlineInput(initial, onCommit, onCancel) {
     const input = el('input', 'lib-input')
     input.type = 'text'
@@ -290,21 +277,53 @@ export function init(app) {
     return row
   }
 
-  function renderNode(node, depth, q) {
+  // A folder's children are read only when it is opened. A loading row shows meanwhile; a stale answer (the tree was
+  // refreshed or the folder changed since) is dropped.
+  async function loadChildren(node) {
+    if (node.loading) return
+    node.loading = true
+    const root = app.state.folder
+    renderFolder()
+    try {
+      const res = await window.folio.folderChildren(node.path)
+      if (app.state.folder !== root) return
+      node.children = res.children
+      node.more = res.more
+    } catch {
+      node.children = []
+      node.more = 0
+      app.toast('Could not read ' + node.name)
+    } finally {
+      node.loading = false
+    }
+    if (app.state.folder === root) renderFolder()
+  }
+
+  function renderMore(depth, n) {
+    treeEl.appendChild(el('p', 'lib-empty', `${n} more not shown here. Type in the filter to find them.`))
+  }
+
+  function renderNode(node, depth) {
     if (node.dir) {
-      const open = q ? true : !collapsed.has(node.path)
+      const open = expanded.has(node.path)
       const row = treeRow(depth, node.name, node.path, {
         dir: true,
         open,
         onClick: () => {
-          if (collapsed.has(node.path)) collapsed.delete(node.path)
-          else collapsed.add(node.path)
+          if (expanded.has(node.path)) expanded.delete(node.path)
+          else expanded.add(node.path)
+          if (expanded.has(node.path) && node.children === null) loadChildren(node)
           renderFolder()
         },
       })
       treeEl.appendChild(row)
       if (open && pending && pending.mode === 'create' && pending.dir === node.path) treeEl.appendChild(createRow(depth + 1, node.path))
-      if (open) for (const c of node.children || []) renderNode(c, depth + 1, q)
+      if (open && node.children === null && !node.loading) loadChildren(node)
+      if (open && node.loading) treeEl.appendChild(el('p', 'lib-empty tree-loading', 'Loading…')).style.paddingLeft = 8 + (depth + 1) * 14 + 'px'
+      if (open && node.children) {
+        for (const c of node.children) renderNode(c, depth + 1)
+        if (node.more) renderMore(depth + 1, node.more)
+      }
       return
     }
     treeEl.appendChild(
@@ -328,13 +347,61 @@ export function init(app) {
     folderName.textContent = root.name
     folderName.title = root.root
     const q = filterText.trim().toLowerCase()
-    const kids = q ? pruneList(root.children || [], q) : root.children || []
+    if (q) return renderFind(root, q)
     if (pending && pending.mode === 'create' && pending.dir === root.root) treeEl.appendChild(createRow(0, root.root))
+    const kids = root.children || []
     if (!kids.length) {
-      treeEl.appendChild(el('p', 'lib-empty', q ? 'No files match this filter.' : 'This folder is empty.'))
+      treeEl.appendChild(el('p', 'lib-empty', 'This folder is empty.'))
       return
     }
-    for (const c of kids) renderNode(c, 0, q)
+    for (const c of kids) renderNode(c, 0)
+    if (root.more) renderMore(0, root.more)
+  }
+
+  // Filter with text: the whole folder is searched by name in the main process (bounded, see findNames there), so matches
+  // are found even inside folders that have not been opened yet.
+  let findState = null // { q, hits, capped }
+  let findPending = ''
+  let findTimer = null
+  function runFind(root, q) {
+    findPending = q
+    clearTimeout(findTimer)
+    findTimer = setTimeout(async () => {
+      let res = { hits: [], capped: false }
+      try {
+        res = await window.folio.folderFind(root.root, q)
+      } catch {}
+      if (app.state.folder !== root || filterText.trim().toLowerCase() !== q) {
+        findPending = '' // a stale answer must not block the next search for the same text
+        return
+      }
+      findState = { root: root.root, q, hits: res.hits, capped: res.capped }
+      findPending = ''
+      renderFolder()
+    }, 160)
+  }
+  function renderFind(root, q) {
+    if (!findState || findState.q !== q || findState.root !== root.root) {
+      if (findPending !== q) runFind(root, q)
+      treeEl.appendChild(el('p', 'lib-empty', 'Searching…'))
+      return
+    }
+    if (!findState.hits.length) {
+      treeEl.appendChild(el('p', 'lib-empty', 'No files match this filter.'))
+      return
+    }
+    for (const h of findState.hits) {
+      const rel = h.path.slice(root.root.length + 1)
+      const row = treeRow(0, h.name, h.path, {
+        file: true,
+        open: isOpenPath(h.path),
+        active: h.path === activePath(),
+        onClick: () => app.actions.openPath(h.path),
+      })
+      row.appendChild(el('span', 'tree-hint', rel.slice(0, Math.max(0, rel.length - h.name.length)).replace(/[\\/]$/, '')))
+      treeEl.appendChild(row)
+    }
+    if (findState.capped) treeEl.appendChild(el('p', 'lib-empty', `Showing the first ${findState.hits.length} matches. Type more to narrow it.`))
   }
 
   /* ---------- tree actions ---------- */
@@ -349,7 +416,7 @@ export function init(app) {
   }
 
   function startCreate(dir) {
-    collapsed.delete(dir)
+    expanded.add(dir)
     pending = { mode: 'create', dir }
     renderFolder()
   }
@@ -398,7 +465,7 @@ export function init(app) {
     try {
       await window.folio.renameFile(oldPath, newPath)
       retargetAll(oldPath, newPath)
-      app.actions.refreshFolder()
+      await app.actions.refreshFolder()
     } catch (e) {
       app.toast(`Could not rename ${base}: ${errText(e)}`)
       renderFolder()
@@ -416,7 +483,7 @@ export function init(app) {
     try {
       await window.folio.trashFile(path)
       retargetAll(path, null)
-      app.actions.refreshFolder()
+      await app.actions.refreshFolder()
     } catch (e) {
       app.toast(`Could not move ${name} to the Recycle Bin`)
     }

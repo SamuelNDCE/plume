@@ -170,7 +170,14 @@ export function createCodeEditor(host, { onChange, onLanguage } = {}) {
 
   const view = new EditorView({ state: makeState(''), parent: host })
 
+  // Above this size the syntax parser is skipped: parsing a 40 MB Markdown file took about 5 s on open. The text stays editable.
+  const LANGUAGE_MAX_CHARS = 2 * 1024 * 1024
   function loadLanguage(filename, token) {
+    if (view.state.doc.length > LANGUAGE_MAX_CHARS) {
+      langName = 'Plain text (large file)'
+      if (onLanguage) onLanguage(langName)
+      return
+    }
     if (isMarkdown(filename)) {
       langName = 'Markdown'
       view.dispatch({ effects: cLang.reconfigure(markdown({ codeLanguages: languages })), annotations: programmatic.of(true) })

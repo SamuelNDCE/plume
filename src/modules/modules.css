@@ -977,3 +977,12 @@ body.pdf-pages:not(.pages-off) #files-pane, body.pdf-pages:not(.pages-off) #sear
 .pdfedit-pop-ok:hover { background: var(--accent); filter: brightness(1.08); }
 @media (prefers-reduced-motion: reduce) { .pdfedit-pop-btn { transition: none; } }
 @media print { .pdfedit-bar, .pdfedit-layer, .pdfedit-pop { display: none; } }
+
+/* folder filter results: the folder part of each match, and the loading row under an opening folder */
+.tree-hint { margin-left: 6px; font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-loading { font-style: italic; }
+
+/* HTML rich view: the page sits in a sandboxed frame; the note above it says scripts are off */
+.htmlv { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.htmlv-note { font-size: 12px; color: var(--fg-muted); padding: 6px 12px; border-bottom: 1px solid var(--border); }
+.htmlv-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--bg); }

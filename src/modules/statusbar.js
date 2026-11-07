@@ -5,7 +5,7 @@
 const CJK = /[ᄀ-ᇿ⺀-⿟぀-ヿ㄀-ㄯ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿ｦ-ﾟ]/g
 
 import { encName } from './texttools.js'
-const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image' }
+const MODE_LABEL = { wysiwyg: 'Rich', source: 'Source', table: 'Table', image: 'Image', htmlview: 'Rich' }
 
 // Plain text of a markdown document: fences, syntax and HTML removed, text kept.
 function stripMarkdown(md) {
@@ -181,7 +181,7 @@ export function init(app) {
     kindEl.textContent = t && t.readOnly ? 'Read-only preview' : ''
     const mode = app.state.mode
     const label = MODE_LABEL[mode] || ''
-    const toggles = mode === 'wysiwyg' || mode === 'source'
+    const toggles = mode === 'wysiwyg' || mode === 'source' || mode === 'htmlview'
     modeBtn.textContent = label
     modeBtn.hidden = !label
     modeBtn.disabled = !toggles

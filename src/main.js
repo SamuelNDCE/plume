@@ -36,6 +36,21 @@ let mountToken = 0
 // Larger files are not opened in full: that heap cost grows with size, and 150 MB was not measured cleanly.
 const FULL_OPEN_MAX = 128 * 1024 * 1024
 const PREVIEW_BYTES = 5 * 1024 * 1024
+// Markdown above this opens in Source view: the rich editor is too slow on a document this size (the editor stays editable).
+const RICH_MAX = 2 * 1024 * 1024
+// A file that takes longer than this to read is abandoned with a message instead of leaving the window waiting.
+const OPEN_TIMEOUT_MS = 60 * 1000
+const withTimeout = (promise, ms) => {
+  let timer
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error('timeout')
+      err.timeout = true
+      reject(err)
+    }, ms)
+  })
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer))
+}
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
 const MD_RE = /\.(md|markdown|mdown|mkd)$/i
@@ -52,6 +67,7 @@ const kindOf = (name) =>
   : /\.docx$/i.test(name) ? 'docx'
   : /\.xlsx$/i.test(name) ? 'xlsx'
   : /\.(csv|tsv)$/i.test(name) ? 'table'
+  : /\.html?$/i.test(name) ? 'html'
   : 'text'
 const doc = () => app.state.tabs[app.state.active]
 
@@ -68,7 +84,9 @@ function show(view) {
   }
   scrollEl.hidden = view !== 'wysiwyg'
   cmHost.hidden = view !== 'source'
-  viewerHost.hidden = view !== 'table' && view !== 'image' && view !== 'viewer'
+  // leaving a viewer empties its host, so a hidden HTML preview (or PDF) is not kept alive in the page
+  if (view === 'source' || view === 'wysiwyg' || view === 'empty') viewerHost.textContent = ''
+  viewerHost.hidden = view !== 'table' && view !== 'image' && view !== 'viewer' && view !== 'htmlview'
   emptyEl.hidden = view !== 'empty'
   app.state.mode = view
   document.body.dataset.view = view
@@ -300,6 +318,13 @@ async function render() {
     await mountLogFor(d)
     return
   }
+  if (d.kind === 'html' && d.view !== 'source') {
+    await destroyRich()
+    show('htmlview')
+    const { mountHtmlPreview } = await import('./modules/htmlview.js')
+    await mountHtmlPreview(viewerHost, d)
+    return
+  }
   if (d.kind === 'md' && d.view !== 'source') {
     show('wysiwyg')
     await mountRich(d.content)
@@ -418,9 +443,14 @@ async function openPath(p) {
     } else if (kind === 'image') {
       d = { name, kind, view: 'rich', path: p, content: '', saved: '', dirty: false, dataUrl: await api.readImage(p) }
     } else {
-      const f = await api.readFile(p, preview ? { maxBytes: PREVIEW_BYTES } : {})
+      if (st?.size > 20 * 1048576) app.toast(`Opening ${name}…`)
+      const f = await withTimeout(api.readFile(p, preview ? { maxBytes: PREVIEW_BYTES } : {}), OPEN_TIMEOUT_MS)
       if (f.binary) return app.toast(`${name} is a binary file`)
       d = { name, kind, view: 'rich', path: p, content: f.content, saved: f.content, dirty: false, encoding: f.encoding || 'utf-8', eol: f.eol || defaultEol(kind), mixedEol: !!f.mixedEol }
+      if (kind === 'md' && f.content.length > RICH_MAX) {
+        d.view = 'source'
+        app.toast(`${name} is large: opened in Source view (Ctrl+/ switches to Rich)`)
+      }
       if (preview) Object.assign(d, { readOnly: true, view: 'source', truncated: f.truncated, totalSize: f.size })
       if (kind === 'text' && (d.log = await detectLog(name, f.content))) {
         d.view = 'rich'
@@ -434,7 +464,7 @@ async function openPath(p) {
     rememberRecent(p)
     await addDoc(d)
   } catch (e) {
-    app.toast('Could not open ' + baseName(p))
+    app.toast(e && e.timeout ? `${baseName(p)} took over ${OPEN_TIMEOUT_MS / 1000} s to read, so it was not opened` : 'Could not open ' + baseName(p))
   }
 }
 
@@ -635,7 +665,8 @@ async function refreshFolder() {
 /* ---------- autosave, session, external changes ---------- */
 function scheduleAutosave() {
   clearTimeout(autosaveTimer)
-  saveSession()
+  clearTimeout(sessionTimer)
+  sessionTimer = setTimeout(saveSession, 400)
   if (!app.settings.get('autosave')) return
   autosaveTimer = setTimeout(async () => {
     const d = doc()
@@ -643,23 +674,42 @@ function scheduleAutosave() {
     if (d && d.path && d.dirty && !d.readOnly && !d.truncated && d.kind !== 'image' && !BINARY_KINDS.has(d.kind)) await saveDoc(d)
   }, 1500)
 }
+let sessionTimer = null
+// Unsaved text is kept in the session backup up to SESSION_TEXT_MAX per tab. If the backup still does not fit the browser
+// storage quota, the text of the oversize tabs is dropped and the user is told; it used to fail silently and lose the session.
+const SESSION_TEXT_MAX = 512 * 1024
 function saveSession() {
+  // Decided before stringifying: a 40 MB unsaved document used to be serialised two or three times on every tab switch.
+  let dropped = []
+  const tabs = app.state.tabs.map((t) => {
+    const content = t.path && !t.dirty ? '' : t.content
+    const row = { name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, log: !!t.log, truncated: !!t.truncated, totalSize: t.totalSize, mtime: t.mtime, size: t.size, saved: t.saved, dirty: t.kind === 'xlsx' || t.kind === 'pdf' ? false : t.dirty }
+    if (typeof content === 'string' && content.length > SESSION_TEXT_MAX) {
+      dropped.push(t.name)
+      return { ...row, content: '', lost: true }
+    }
+    return { ...row, content }
+  })
   try {
-    localStorage.setItem(
-      'folio.session',
-      JSON.stringify({
-        active: app.state.active,
-        tabs: app.state.tabs.map((t) => ({ name: t.name, kind: t.kind, view: t.view, path: t.path, readOnly: !!t.readOnly, log: !!t.log, truncated: !!t.truncated, totalSize: t.totalSize, mtime: t.mtime, size: t.size, content: t.path && !t.dirty ? '' : t.content, saved: t.saved, dirty: t.kind === 'xlsx' || t.kind === 'pdf' ? false : t.dirty })),
-      }),
-    )
-  } catch {}
+    localStorage.setItem('folio.session', JSON.stringify({ active: app.state.active, tabs }))
+  } catch {
+    // quota exceeded even with the size limit: keep the tab list, drop all unsaved text
+    try {
+      localStorage.setItem('folio.session', JSON.stringify({ active: app.state.active, tabs: tabs.map((t) => ({ ...t, content: '', lost: t.dirty || t.lost })) }))
+    } catch (err) {
+      console.warn('[session] backup not written', err)
+    }
+    dropped = app.state.tabs.filter((t) => t.dirty).map((t) => t.name)
+  }
+  if (dropped.length) app.toast(`Unsaved text in ${dropped.join(', ')} is too large for the session backup. Save it with Ctrl+S.`)
 }
 async function restoreSession() {
   try {
     const s = JSON.parse(localStorage.getItem('folio.session') || 'null')
     if (!s || !s.tabs.length) return false
     for (const t of s.tabs) {
-      if (t.path && !t.dirty) {
+      // A tab whose unsaved text was too big for the session backup reloads from disk: an empty copy must never be autosaved over the file.
+      if (t.path && (!t.dirty || t.lost)) {
         try {
           if (t.kind === 'image') app.state.tabs.push({ ...t, dataUrl: await api.readImage(t.path) })
           else if (BINARY_KINDS.has(t.kind)) app.state.tabs.push({ ...t, bytes: await api.readBytes(t.path), readOnly: t.kind !== 'xlsx' })

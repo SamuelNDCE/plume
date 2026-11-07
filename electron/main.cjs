@@ -167,23 +167,68 @@ function createWindow() {
   }
 }
 
-const readDirTree = (dir, depth = 0) => {
-  let entries = []
+// Folder tree, one directory level at a time and async, so a huge folder never freezes the main process.
+// A directory's children load only when the user opens it (`children: null` until then). Each level shows at most
+// DIR_LIMIT entries; `more` counts the rest, and the filter (folder:find) reaches them by name.
+const DIR_LIMIT = 2000
+const skipEntry = (name) => name.startsWith('.') || name === 'node_modules'
+async function listDir(dir) {
+  let entries
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
+    entries = await fs.promises.readdir(dir, { withFileTypes: true })
   } catch {
-    return []
+    return { children: [], more: 0 }
   }
-  return entries
-    .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
-    .map((e) => {
+  const dirs = []
+  const files = []
+  for (const e of entries) {
+    if (skipEntry(e.name)) continue
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) dirs.push({ name: e.name, path: full, dir: true, children: null })
+    else if (OPENABLE(e.name)) files.push({ name: e.name, path: full, dir: false })
+  }
+  const byName = (a, b) => a.name.localeCompare(b.name)
+  dirs.sort(byName)
+  files.sort(byName)
+  const all = dirs.concat(files)
+  return { children: all.slice(0, DIR_LIMIT), more: Math.max(0, all.length - DIR_LIMIT) }
+}
+
+// Name search across a granted folder, for the sidebar filter and Quick Open. Async and bounded: it yields to the event
+// loop between directories, stops after MAX_FIND hits, MAX_FIND_DIRS directories or FIND_MS, and reports `capped`.
+const MAX_FIND = 300
+const MAX_FIND_DIRS = 20000
+const FIND_MS = 3000
+async function findNames(root, query) {
+  const q = String(query || '').toLowerCase()
+  const hits = []
+  const queue = [root]
+  const started = Date.now()
+  let visited = 0
+  let capped = false
+  while (queue.length) {
+    if (hits.length >= MAX_FIND || visited >= MAX_FIND_DIRS || Date.now() - started > FIND_MS) {
+      capped = true
+      break
+    }
+    const dir = queue.shift()
+    visited++
+    let entries
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const e of entries) {
+      if (skipEntry(e.name) || e.isSymbolicLink()) continue
       const full = path.join(dir, e.name)
-      if (e.isDirectory()) return { name: e.name, path: full, dir: true, children: depth < 6 ? readDirTree(full, depth + 1) : [] }
-      return OPENABLE(e.name) ? { name: e.name, path: full, dir: false } : null
-    })
-    .filter(Boolean)
-    .filter((n) => !n.dir || n.children.length)
-    .sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1))
+      if (e.isDirectory()) queue.push(full)
+      else if (OPENABLE(e.name) && e.name.toLowerCase().includes(q)) hits.push({ name: e.name, path: full, dir: false })
+      if (hits.length >= MAX_FIND) break
+    }
+    await new Promise((r) => setImmediate(r))
+  }
+  return { hits, capped }
 }
 
 const mdFilters = [
@@ -212,17 +257,23 @@ ipc.handle('grant:dropped', (_e, paths) => {
   return out // the paths that were granted
 })
 // opts.maxBytes reads only the start of a file (the read-only preview of a very large one), cut back to a whole line.
-ipc.handle('file:read', (_e, p, opts = {}) => {
+// Whole-file reads are refused above WHOLE_READ_MAX even if the renderer asks: the renderer's own limit is the first line
+// of defence, this is the second, so a bad request cannot pull a multi-gigabyte file into memory.
+const WHOLE_READ_MAX = 128 * 1024 * 1024
+ipc.handle('file:read', async (_e, p, opts = {}) => {
   need(p)
-  const size = fs.statSync(p).size
+  const st = await fs.promises.stat(p)
+  if (!st.isFile()) throw new Error('not a file')
+  const size = st.size
+  if (!opts.maxBytes && size > WHOLE_READ_MAX) throw new Error('file too large to open whole')
   let buf
   if (opts.maxBytes && size > opts.maxBytes) {
     buf = Buffer.alloc(opts.maxBytes)
-    const fd = fs.openSync(p, 'r')
-    try { fs.readSync(fd, buf, 0, opts.maxBytes, 0) } finally { fs.closeSync(fd) }
+    const fh = await fs.promises.open(p, 'r')
+    try { await fh.read(buf, 0, opts.maxBytes, 0) } finally { await fh.close() }
     const nl = buf.lastIndexOf(0x0a)
     if (nl > 0) buf = buf.subarray(0, nl + 1)
-  } else buf = fs.readFileSync(p)
+  } else buf = await fs.promises.readFile(p)
   const d = opts.encoding ? textio.decodeAs(buf, opts.encoding) : textio.decode(buf)
   return { path: p, name: path.basename(p), size, truncated: buf.length < size, binary: d.binary, content: d.content, encoding: d.encoding, eol: d.eol, mixedEol: d.mixedEol }
 })
@@ -343,9 +394,19 @@ ipc.handle('folder:open-dialog', async () => {
   grantQuiet(r.filePaths[0], { folder: true })
   return r.filePaths[0]
 })
-ipc.handle('folder:tree', (_e, dir) => {
+ipc.handle('folder:tree', async (_e, dir) => {
   need(dir, { folder: true })
-  return { root: dir, name: path.basename(dir), children: readDirTree(dir) }
+  const top = await listDir(dir)
+  return { root: dir, name: path.basename(dir), children: top.children, more: top.more }
+})
+ipc.handle('folder:children', async (_e, dir) => {
+  need(dir, { folder: true })
+  return listDir(dir)
+})
+ipc.handle('folder:find', async (_e, root, query) => {
+  need(root, { folder: true })
+  if (typeof query !== 'string' || !query.trim()) return { hits: [], capped: false }
+  return findNames(root, query.trim())
 })
 ipc.handle('file:reveal', (_e, p) => {
   need(p)
@@ -362,12 +423,25 @@ ipc.handle('file:stat', (_e, p) => {
 })
 // Whole-file bytes for the PDF, Word and Excel viewers. Capped so one request cannot exhaust memory.
 const BYTES_MAX = 512 * 1024 * 1024
-ipc.handle('file:read-bytes', (_e, p) => {
+ipc.handle('file:read-bytes', async (_e, p) => {
   need(p)
-  const st = fs.statSync(p)
+  const st = await fs.promises.stat(p)
   if (!st.isFile()) throw new Error('not a file')
   if (st.size > BYTES_MAX) throw new Error('file too large to open')
-  return fs.readFileSync(p)
+  return fs.promises.readFile(p)
+})
+// Assets an HTML preview needs (a stylesheet, an image the page links to). Only these types, only small files, and only
+// files the user has granted (a folder they opened covers its contents). The preview never reads from disk itself.
+const ASSET_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.css': 'text/css' }
+const ASSET_MAX = 8 * 1024 * 1024
+ipc.handle('file:read-asset', async (_e, p) => {
+  need(p)
+  const mime = ASSET_MIME[path.extname(p).toLowerCase()]
+  if (!mime) throw new Error('asset type not allowed')
+  const st = await fs.promises.stat(p)
+  if (!st.isFile() || st.size > ASSET_MAX) throw new Error('asset too large or not a file')
+  const buf = await fs.promises.readFile(p)
+  return mime === 'text/css' ? { text: buf.toString('utf8') } : { dataUrl: `data:${mime};base64,${buf.toString('base64')}` }
 })
 ipc.handle('file:read-image', (_e, p) => {
   need(p)
@@ -444,13 +518,21 @@ const regValue = (key, name) => new Promise((resolve) => {
     resolve(m ? m[1] : '')
   })
 })
+// Plume counts as the default when Windows opens ANY file type Plume registers (package.json fileAssociations) with Plume,
+// not only .md: a user who chose Plume for .txt or .html has already made the choice, and must not be asked again.
+const registeredExts = () => (require('../package.json').build.fileAssociations || []).map((a) => '.' + String(a.ext).replace(/^\./, '').toLowerCase())
+const opensWithPlume = async (ext) => {
+  const progId = await regValue('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\' + ext + '\\UserChoice', 'ProgId')
+  if (!progId || /[\\\r\n]/.test(progId)) return false
+  const cmd = await regValue('HKCR\\' + progId + '\\shell\\open\\command')
+  // Plume.exe by name: the installed copy, or a dev run (whose execPath is electron.exe) when the installed copy is the default.
+  return !!cmd && (/plume\.exe/i.test(cmd) || cmd.toLowerCase().includes(process.execPath.toLowerCase()))
+}
 ipc.handle('app:is-default-app', async () => {
   if (process.platform !== 'win32') return false
   try {
-    const progId = await regValue('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.md\\UserChoice', 'ProgId')
-    if (!progId || /[\\\r\n]/.test(progId)) return false
-    const cmd = await regValue('HKCR\\' + progId + '\\shell\\open\\command')
-    return !!cmd && cmd.toLowerCase().includes(process.execPath.toLowerCase())
+    const answers = await Promise.all(registeredExts().map((e) => opensWithPlume(e).catch(() => false)))
+    return answers.some(Boolean)
   } catch {
     return false
   }

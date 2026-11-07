@@ -126,6 +126,8 @@ function jumpToHeading(h, index) {
   s.addRange(range)
 }
 
+let findCache = { key: '', hits: [], pending: '' }
+
 function buildItems(rawQuery) {
   let q = rawQuery.replace(/^\s*>\s*/, '')
   const out = []
@@ -166,11 +168,28 @@ function buildItems(rawQuery) {
   })
 
   // Go to file: only with a typed query, so the empty palette stays short.
+  // Files are found by name across the whole folder in the main process (bounded), not from the loaded tree, so folders
+  // that were never opened are reachable too. The result is cached per folder and query; it re-renders when it arrives.
   if (q && app.state.folder) {
-    for (const f of flattenFiles(app.state.folder.children || [], '')) {
-      const s = bestScore(q, f.name, f.rel)
-      if (s === null) continue
-      out.push({ kind: 'file', label: f.name, meta: f.rel, score: s - 200, run: () => app.actions.openPath(f.path) })
+    const folderRoot = app.state.folder.root
+    const key = folderRoot + '|' + q
+    if (findCache.key !== key && findCache.pending !== key) {
+      findCache.pending = key
+      window.folio
+        .folderFind(folderRoot, q)
+        .then((res) => (findCache = { key, hits: res.hits }))
+        .catch(() => (findCache = { key, hits: [] }))
+        .then(() => {
+          if (findCache.key === key) render()
+        })
+    }
+    if (findCache.key === key) {
+      for (const h of findCache.hits) {
+        const rel = h.path.slice(folderRoot.length + 1)
+        const s = bestScore(q, h.name, rel)
+        if (s === null) continue
+        out.push({ kind: 'file', label: h.name, meta: rel, score: s - 200, run: () => app.actions.openPath(h.path) })
+      }
     }
   }
 
@@ -178,15 +197,6 @@ function buildItems(rawQuery) {
   return out.slice(0, MAX_ITEMS)
 }
 
-// Files under a folder tree node list, depth first, with their path relative to the folder.
-function flattenFiles(nodes, prefix, acc = []) {
-  for (const n of nodes) {
-    if (acc.length >= 5000) break
-    if (n.dir) flattenFiles(n.children || [], prefix + n.name + '/', acc)
-    else acc.push({ name: n.name, path: n.path, rel: prefix + n.name })
-  }
-  return acc
-}
 
 function runItem(it) {
   if (!it) return
