@@ -401,7 +401,7 @@ export function init(app) {
       consentBtn.disabled = !on
     })
     f.append(warn, row('Plugin consent', 'Plugins load at startup only after you enable one and agree. Withdrawing stops them loading at the next start.', consentWrap), note, list, tools, el('div', 'st-desc', 'Writing a plugin? See docs/PLUGINS.md.'))
-    draw()
+    draw().catch((e) => console.error('[settings] draw', e))
     return f
   }
 
@@ -621,7 +621,7 @@ export function init(app) {
       }
     }
     q.addEventListener('input', draw)
-    draw()
+    draw().catch((e) => console.error('[settings] draw', e))
     f.append(q, wrap)
     return f
   }

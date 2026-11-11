@@ -15,10 +15,24 @@ concurrency:
 
 jobs:
   build:
+    # Windows is split in two so the slow portable build (about 4.5 min) runs beside the NSIS installer build.
+    # latest*.yml comes only from the NSIS build, so only that leg uploads it.
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            target: nsis
+            flags: '--win nsis'
+          - os: windows-latest
+            target: portable
+            flags: '--win portable'
+          - os: ubuntu-latest
+            target: all
+            flags: ''
+          - os: macos-latest
+            target: all
+            flags: ''
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -33,10 +47,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Electron and electron-builder download the same runtime and NSIS tools on every run. Cache them on Windows.
+      - name: Cache Electron and electron-builder downloads
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-${{ runner.os }}-${{ matrix.target }}-
       # Unsigned build: macOS, Linux, and Windows until the Azure signing secrets below exist.
       - name: Build (unsigned)
         if: matrix.os != 'windows-latest' || env.AZURE_CLIENT_ID == ''
-        run: npx electron-builder --publish never
+        run: npx electron-builder --publish never ${{ matrix.flags }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       # Windows build signed with Azure Artifact Signing. Runs automatically once AZURE_* secrets and
@@ -44,7 +69,7 @@ jobs:
       - name: Build (Windows, signed)
         if: matrix.os == 'windows-latest' && env.AZURE_CLIENT_ID != ''
         run: >
-          npx electron-builder --publish never
+          npx electron-builder --publish never ${{ matrix.flags }}
           -c.win.azureSignOptions.endpoint="${{ vars.AZURE_SIGNING_ENDPOINT }}"
           -c.win.azureSignOptions.codeSigningAccountName="${{ vars.AZURE_SIGNING_ACCOUNT }}"
           -c.win.azureSignOptions.certificateProfileName="${{ vars.AZURE_SIGNING_PROFILE }}"
@@ -53,12 +78,21 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      # The NSIS leg also uploads the update feed. The portable leg must not: both legs would write the same latest*.yml name.
       - uses: actions/upload-artifact@v7
+        if: matrix.target == 'nsis' || matrix.target == 'all'
         with:
-          name: plume-${{ matrix.os }}
+          name: plume-${{ matrix.os }}-${{ matrix.target }}
           path: |
             release/Plume-*
             release/latest*.yml
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: matrix.target == 'portable'
+        with:
+          name: plume-${{ matrix.os }}-${{ matrix.target }}
+          path: release/Plume-*
           if-no-files-found: error
           retention-days: 7
 

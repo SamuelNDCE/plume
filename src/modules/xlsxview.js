@@ -823,7 +823,7 @@ export async function mount(host, d, app) {
     }
     if (mod && (k === 'c' || k === 'C')) {
       e.preventDefault()
-      copySelection()
+      copySelection().catch((err) => console.error('[xlsx] copy', err))
       return
     }
     // Ctrl+Space selects the column, Shift+Space the row (typing a space does not start an edit)
@@ -840,7 +840,7 @@ export async function mount(host, d, app) {
     if (editable) {
       if (mod && (k === 'z' || k === 'Z') && !e.shiftKey) { e.preventDefault(); replay(xl.undo, xl.redo, 'undo'); return }
       if (mod && (k === 'y' || k === 'Y' || ((k === 'z' || k === 'Z') && e.shiftKey))) { e.preventDefault(); replay(xl.redo, xl.undo, 'redo'); return }
-      if (mod && (k === 'v' || k === 'V')) { e.preventDefault(); pasteClipboard(); return }
+      if (mod && (k === 'v' || k === 'V')) { e.preventDefault(); pasteClipboard().catch((err) => console.error('[xlsx] paste', err)); return }
       if (mod && (k === 'x' || k === 'X')) { e.preventDefault(); copySelection().then(clearRange); return }
       if (mod && !e.shiftKey && (k === 'd' || k === 'D')) { e.preventDefault(); fillRange('down'); return }
       if (mod && !e.shiftKey && (k === 'r' || k === 'R')) { e.preventDefault(); fillRange('right'); return }
@@ -1381,7 +1381,7 @@ export async function mount(host, d, app) {
     if (raf) cancelAnimationFrame(raf)
     if (S.find) { S.find.token++; clearTimeout(S.find.timer) }
     if (worker) { worker.terminate(); worker = null }
-    for (const fn of cleanups) { try { fn() } catch {} }
+    for (const fn of cleanups) { try { fn() } catch (e) { console.info('[xlsx] cleanup step failed', e && e.message) } }
     mo.disconnect()
     S.sheets = []
     S.find = null

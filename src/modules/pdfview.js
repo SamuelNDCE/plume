@@ -668,7 +668,7 @@ class PdfViewer {
       // pdf.js transfers the buffer to its worker; hand it a copy so the tab can be re-mounted from d.bytes
       const data = new Uint8Array(this.d.bytes.byteLength)
       data.set(this.d.bytes)
-      this.task = lib.getDocument({ data, isEvalSupported: false, enableXfa: false, verbosity: 0 })
+      this.task = lib.getDocument({ data, password: this.pw || undefined, isEvalSupported: false, enableXfa: false, verbosity: 0 })
       this.pdf = await this.task.promise
       if (this.dead) return
       this.n = this.pdf.numPages
@@ -706,14 +706,38 @@ class PdfViewer {
     }
   }
 
+  // Asks for the password of an encrypted PDF. The password is kept in memory for this tab only, never written to disk.
+  askPassword(wrong) {
+    this.root.textContent = ''
+    const box = el('form', 'doc-viewer-error pdfv-msg pdfv-pw', { role: 'alert' })
+    const h = el('strong')
+    h.textContent = 'This PDF is password protected'
+    const p = el('p')
+    p.textContent = (wrong ? 'That password is not correct. ' : '') + 'Enter the password to open ' + this.d.name + '. It is kept in memory only and never saved.'
+    const input = el('input', 'pdfv-pw-input', { type: 'password', autocomplete: 'off', 'aria-label': 'PDF password' })
+    const go = el('button', 'pdfv-pw-go', { type: 'submit' })
+    go.textContent = 'Open'
+    box.append(h, p, input, go)
+    box.addEventListener('submit', (ev) => {
+      ev.preventDefault()
+      if (!input.value) return
+      this.pw = input.value
+      this.open()
+    })
+    this.root.appendChild(box)
+    input.focus()
+  }
+
   fail(e) {
     console.info('[pdfview]', e && e.name, e && e.message)
     const name = e && e.name
     let title = 'This PDF could not be opened'
     let body = 'The file may be damaged or is not a PDF.'
     if (name === 'PasswordException') {
-      title = 'This PDF is password protected'
-      body = 'Plume cannot open encrypted PDFs yet: a password prompt is not supported.'
+      // code 2 = the password was given and is wrong (pdf.js PasswordResponses.INCORRECT_PASSWORD)
+      this.cleanupDoc()
+      this.askPassword(e.code === 2)
+      return
     } else if (name === 'InvalidPDFException') {
       body = 'The file is not a valid PDF or is damaged.'
     } else if (name === 'MissingPDFException') {

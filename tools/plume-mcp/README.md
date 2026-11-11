@@ -6,6 +6,7 @@ A small, optional [MCP](https://modelcontextprotocol.io) server that lets AI too
 - It is separate from the Plume app: Plume itself never touches the network for this.
 - Only `.md`, `.markdown`, `.mdown`, `.mkd` and `.txt` files. Files over 2 MB are refused.
 - Every path must stay inside the folder: absolute paths, drive letters, `..` and symlinks are refused.
+- It does not read PDF, Word or Excel files. For a PDF, open it in Plume and use the Source view, or copy the text out of the Rich view.
 
 ## Run
 

@@ -13,6 +13,8 @@ Free, open-source (MIT) Markdown editor and viewer. Electron + Vite, vanilla JS.
 - Source-view shortcuts: build, then `npx electron tests/source-redo.cjs`.
 - Real-app QA hook in `electron/main.cjs`: `PLUME_SMOKE=<png>` (screenshot, prints `ERRORS:[...]`, must be `[]`), or `PLUME_STEPS=<json>` with `PLUME_SHOT_DIR` to type keys, move the mouse, click, run JS and take screenshots (`window.__plume` is the app object). Stop stray Electron windows and clear `%APPDATA%\plume\Local Storage` first, or runs share state with a leftover window.
 - UI work is not done until it has been run in the real app and screenshotted. Build unminified (`vite build --minify false`) to read a minified startup error.
+- Packaged build (0.6.1+): `npx electron-builder --win --dir`, then read the fuses from `release/win-unpacked/Plume.exe` with `@electron/fuses` (`getCurrentFuseWire`). Expected: RunAsNode, NodeOptions and CLI inspect off; cookie encryption, asar-only and embedded integrity on; GrantFileProtocolExtraPrivileges off.
+- Packaged page without a window: `OUT_DIR=<folder> MAIN_CJS=release/win-unpacked/resources/app.asar/electron/main.cjs node_modules/electron/dist/electron.exe tests/packaged-hidden.cjs <file.pdf>`. It writes `main-test.log` and `main-hidden.png` to `OUT_DIR`. Do not open the packaged app on the user's screen to check it.
 
 ## Release process (GitHub Actions, on a version tag)
 1. Bump `version` in `package.json`, run the checks above, commit, push to `main`.

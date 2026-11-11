@@ -196,7 +196,7 @@ function applyImagePaths() {
   }
   imgObserver = new MutationObserver(fix)
   imgObserver.observe(editorEl, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
-  fix()
+  fix().catch((e) => console.error('[plume] image fix', e))
 }
 
 // CSV / TSV open in the spreadsheet grid. Its text stays live on the doc, so the normal save path works.
@@ -290,6 +290,18 @@ async function render() {
     await destroyRich()
     show('empty')
     app.bus.emit('empty:show')
+    return
+  }
+  if (d.kind === 'pdf' && d.view === 'source') {
+    // Source view of a PDF: the same code editor as Markdown and HTML source, read only (edits go through pdfedit.js).
+    await destroyRich()
+    show('source')
+    const ce = await ensureCode()
+    ce.setOptions({ spellcheck: false, readOnly: true })
+    ce.setDoc('% Reading the PDF source...\n', d.name)
+    const { pdfSourceText } = await import('./modules/pdfsource.js')
+    const text = await pdfSourceText(d.bytes)
+    if (doc() === d && d.view === 'source') ce.setDoc(text, d.name)
     return
   }
   if (BINARY_KINDS.has(d.kind)) {
@@ -406,7 +418,7 @@ async function activate(i) {
   app.bus.emit('tab:switch', d)
   app.bus.emit('doc:change', d.content)
   saveSession()
-  checkExternal()
+  checkExternal().catch((e) => console.error('[plume] external change check', e))
 }
 
 async function addDoc(d) {
@@ -586,9 +598,12 @@ async function saveDoc(d, forceAs = false) {
 }
 const save = () => doc() && saveDoc(doc())
 const saveAs = () => doc() && saveDoc(doc(), true)
+// Returns true only when every dirty file with a path was saved, so callers (the update restart) can stop on a failure.
 async function saveAll() {
-  for (const d of app.state.tabs) if (d.dirty && d.path) await saveDoc(d)
-  app.toast('Saved all')
+  let ok = true
+  for (const d of app.state.tabs) if (d.dirty && d.path && !(await saveDoc(d))) ok = false
+  if (ok) app.toast('Saved all')
+  return ok
 }
 
 async function closeDoc(i = app.state.active) {
@@ -755,7 +770,10 @@ async function checkExternal() {
         await render()
         app.toast('Reloaded: file changed on disk')
       }
-    } catch {}
+    } catch (e) {
+      // the file may be locked or gone mid-save; the next check or save will retry, so log and carry on
+      console.info('[plume] external change check skipped', e && e.message)
+    }
   }
 }
 window.addEventListener('focus', checkExternal)
@@ -984,4 +1002,4 @@ async function boot() {
     app.bus.emit('app:ready')
   }, 120)
 }
-boot()
+boot().catch((e) => console.error('[plume] boot', e))

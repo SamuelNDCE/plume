@@ -39,7 +39,7 @@ PLUME_SMOKE=smoke.png npx electron .
 node --test test/sheet-core.test.mjs test/textio.test.mjs
 ```
 
-runs the spreadsheet and text-file (encoding, line ending) tests (parsing, formulas, sorting, undo). `tests/source-redo.cjs` is an Electron check for source-view shortcuts: build first (`npm run build`), then `npx electron tests/source-redo.cjs`.
+runs the spreadsheet and text-file (encoding, line ending) tests (parsing, formulas, sorting, undo). `tests/source-redo.cjs` is an Electron check for source-view shortcuts: build first (`npm run build`), then `npx electron tests/source-redo.cjs`. `tests/packaged-hidden.cjs` checks a packaged build's page in a window that never shows; its usage is in the file header and in `PROJECT.md`.
 
 ## Easiest ways to help
 

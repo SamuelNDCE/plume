@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, session } = require('electron')
 const fs = require('node:fs')
 const textio = require('./textio.cjs')
 const { writeAtomic } = require('./atomicwrite.cjs')
@@ -42,7 +42,9 @@ const IMG_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp
 const TEXT_EXT = new Set(['.txt', '.text', '.log', '.json', '.jsonc', '.json5', '.csv', '.tsv', '.xml', '.yaml', '.yml', '.toml', '.ini', '.conf', '.cfg', '.html', '.htm', '.css', '.scss', '.less', '.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx', '.vue', '.svelte', '.py', '.rs', '.go', '.java', '.kt', '.c', '.h', '.cpp', '.hpp', '.cs', '.rb', '.php', '.sh', '.bash', '.zsh', '.bat', '.cmd', '.ps1', '.sql', '.lua', '.swift', '.tex', '.rst', '.org', '.diff', '.patch', '.gitignore', '.env', '.env.example', '.mdx', '.jsonl', '.out', '.err', '.properties'])
 // a dotfile such as .env or .gitignore has no extname, so its whole name counts as the extension
 const extOf = (p) => { const b = path.basename(p).toLowerCase(); return b.startsWith('.') && b.indexOf('.', 1) < 0 ? b : path.extname(b) }
-const OPENABLE = (p) => { const e = extOf(p); return MD_EXT.has(e) || TEXT_EXT.has(e) || IMG_EXT.has(e) }
+// PDF, Word and Excel are viewed by the renderer (pdfview, docxview, xlsxview), so the OS launching us with one must count too.
+const DOC_EXT = new Set(['.pdf', '.docx', '.xlsx'])
+const OPENABLE = (p) => { const e = extOf(p); return MD_EXT.has(e) || TEXT_EXT.has(e) || IMG_EXT.has(e) || DOC_EXT.has(e) }
 // Optional feature modules (each owned by one area). Required lazily so a missing one never blocks launch.
 const optional = (name) => {
   try {
@@ -557,16 +559,27 @@ if (!gotLock) app.quit()
 else {
   app.on('second-instance', (_e, argv) => {
     const f = argv.find((a) => OPENABLE(a))
-    if (win) {
+    if (f) grantQuiet(f)
+    // Window still loading: keep the file for the renderer's startup read (app:take-pending-open) instead of sending it into the void.
+    if (win && !win.webContents.isLoading()) {
       if (win.isMinimized()) win.restore()
       win.focus()
-      if (f) { grantQuiet(f); win.webContents.send('open-path', f) } // a file the OS asked us to open
-    }
+      if (f) win.webContents.send('open-path', f) // a file the OS asked us to open
+    } else if (f) pendingOpen = f
+    else if (win) { if (win.isMinimized()) win.restore(); win.focus() }
   })
   app.whenReady().then(() => {
     // Reload what the user opened before, so restored tabs and the last folder still open. Then the file the OS launched us with.
     grants.configure(path.join(app.getPath('userData'), 'grants.json'))
     if (pendingOpen) grantQuiet(pendingOpen)
+    // Deny every browser permission request (camera, mic, location, notifications, MIDI...). Electron grants them by default.
+    const ses = session.defaultSession
+    ses.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
+    ses.setPermissionCheckHandler(() => false)
+    // No <webview> tags: a guest page would get its own web preferences.
+    app.on('web-contents-created', (_e, contents) => {
+      contents.on('will-attach-webview', (ev) => ev.preventDefault())
+    })
     pluginsIpc && pluginsIpc.register({ app, ipcMain: ipc, shell, protocol: require('electron').protocol })
     themesIpc && themesIpc.register({ app, ipcMain: ipc, shell })
     updaterIpc && updaterIpc.register({ app, ipcMain: ipc, shell, getWindow: () => win })

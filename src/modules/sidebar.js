@@ -370,7 +370,10 @@ export function init(app) {
       let res = { hits: [], capped: false }
       try {
         res = await window.folio.folderFind(root.root, q)
-      } catch {}
+      } catch (e) {
+        // a failed folder search shows no hits; the search box stays usable, so log and carry on
+        console.info('[sidebar] folder search failed', e && e.message)
+      }
       if (app.state.folder !== root || filterText.trim().toLowerCase() !== q) {
         findPending = '' // a stale answer must not block the next search for the same text
         return
@@ -445,7 +448,7 @@ export function init(app) {
     }
     try {
       const dest = await window.folio.createFile(dir, name)
-      app.actions.refreshFolder()
+      Promise.resolve().then(() => app.actions.refreshFolder()).catch((e) => console.error('[sidebar] refresh', e))
       await app.actions.openPath(dest)
     } catch (e) {
       app.toast(`Could not create ${name}: ${errText(e)}`)

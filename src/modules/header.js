@@ -80,7 +80,7 @@ export function init(app) {
     actions.textContent = ''
     const d = doc()
     if (!d) return
-    if (d.kind === 'md' || d.kind === 'table' || d.kind === 'html') {
+    if (d.kind === 'md' || d.kind === 'table' || d.kind === 'html' || d.kind === 'pdf') {
       const seg = el('div', 'seg')
       seg.setAttribute('role', 'group')
       const richOn = d.view !== 'source'

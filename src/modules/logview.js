@@ -238,7 +238,7 @@ export async function mount(host, d, ctx) {
   let pumping = false
   let pumpAgain = false
   let followOn = true
-  try { followOn = localStorage.getItem('plume.logFollow') !== '0' } catch {}
+  try { followOn = localStorage.getItem('plume.logFollow') !== '0' } catch (e) { console.info('[logview] follow setting not read, using default', e && e.name) }
   const canFollow = !!d.path && !d.readOnly && !d.truncated && typeof d.logSize === 'number' && !!api.readTail
   d.following = canFollow && followOn
   let pollTimer = 0
@@ -333,7 +333,7 @@ export async function mount(host, d, ctx) {
   followBtn.addEventListener('click', () => {
     if (!canFollow) return
     followOn = !followOn
-    try { localStorage.setItem('plume.logFollow', followOn ? '1' : '0') } catch {}
+    try { localStorage.setItem('plume.logFollow', followOn ? '1' : '0') } catch (e) { console.info('[logview] follow setting not saved for this session', e && e.name) }
     d.following = followOn
     syncFollowBtn()
     if (followOn) {
@@ -740,7 +740,7 @@ export async function mount(host, d, ctx) {
       draw(true)
       return
     }
-    pump()
+    pump().catch((e) => console.error('[logview] pump', e))
   }
 
   /* ----- follow (tail) ----- */

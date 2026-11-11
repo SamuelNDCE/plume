@@ -2,10 +2,28 @@
 
 All notable changes to Plume are written here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.6.1] - 2026-11-11
+
+### Added
+- PDF source: the Rich/Source switch in the header now works for PDFs, like Markdown and HTML. Source shows the file's check (version, end marker, page count, encryption, form fields, objects) and its object source as PDF syntax. Read only for now.
+- PDF files, Word documents and Excel workbooks open from Explorer (Open with, or as the default app) instead of landing on the empty page.
+- Encrypted PDFs ask for the password. It is kept in memory for that tab only and never saved.
+
+### Changed
+- The app refuses every browser permission request (camera, microphone, location, notifications) and blocks `<webview>` guests.
+- The Windows build sets three more Electron fuses (cookie encryption, asar-only loading, embedded asar integrity) and turns off the file-protocol extra privileges through a build hook (`build/fuses-afterpack.cjs`). `electron` is pinned to 45.1.0.
+- Background promises in the startup and viewer paths report their errors to the console instead of failing silently.
 
 ### Fixed
 - Folder search and the folder tree skip folders the grant does not cover (for example userData inside a granted folder).
+- An update no longer restarts the app when some unsaved file could not be saved. The restart stops, and a message says which changes to save first.
+- Empty error handlers in the log viewer, folder search, updates and spreadsheet viewer now log why they gave up.
+
+## Upcoming
+- Editing a PDF from the window (the UI for the edit tools that exist in code now: highlight, notes, ink, page edits, form fields). Until then, PDF edits are made through the code and saved with Ctrl+S.
+- Editing the source view of a PDF. Read only for now.
+- Full-document PDF bookmarks and an outline panel.
+- Recent files and reopen closed tab (planned).
 
 ## [0.6.0] - 2026-11-07
 

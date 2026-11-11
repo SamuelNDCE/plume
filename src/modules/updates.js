@@ -17,7 +17,9 @@ export function init(app) {
   let lastChecked = 0
   try {
     lastChecked = Number(localStorage.getItem('plume.updateChecked')) || 0
-  } catch {}
+  } catch (e) {
+    console.info('[updates] last check time not read, checking again', e && e.name)
+  }
 
   const el = (tag, cls, text) => {
     const n = document.createElement(tag)
@@ -73,9 +75,19 @@ export function init(app) {
     if (installing) return
     installing = true
     if (last) showScreen(last)
+    let saved = true
     try {
-      app.actions.saveAll && (await app.actions.saveAll())
-    } catch {}
+      if (app.actions.saveAll) saved = (await app.actions.saveAll()) !== false
+    } catch (e) {
+      saved = false
+      console.error('[updates] save before restart failed', e)
+    }
+    if (!saved) {
+      // never restart over unsaved work: the user saves (or closes) first, then installs
+      installing = false
+      app.toast('Not restarting: some changes could not be saved. Save them, then install again.')
+      return
+    }
     // a short beat so the "Restarting" text is readable
     setTimeout(() => api.installUpdate(), 700)
   }
@@ -97,7 +109,9 @@ export function init(app) {
       lastChecked = Date.now()
       try {
         localStorage.setItem('plume.updateChecked', String(lastChecked))
-      } catch {}
+      } catch (e) {
+        console.info('[updates] last check time not saved for next launch', e && e.name)
+      }
     }
     if (s.state === 'none' && manual) {
       manual = false
@@ -117,7 +131,7 @@ export function init(app) {
     } else if (userStarted && s.state === 'ready') {
       hideCard()
       userStarted = false
-      installNow()
+      installNow().catch((e) => console.error('[updates] install', e))
     } else if (!installing) {
       hideScreen()
       const show = s.state === 'available' || s.state === 'ready'

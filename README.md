@@ -102,6 +102,9 @@ The Settings page. Press **`Ctrl+,`** to open it.
 - Page keys: Down, Right and PageDown go to the next page and Up, Left and PageUp to the previous page when the page list has focus. Home and End go to the first and last page. Type a number to jump to that page, or press `Ctrl+G`. Press `F1` for the full list.
 - Rotate a page with **`Ctrl+Shift+R`**. The rotation is saved into the file when you save.
 - Print with **`Ctrl+P`** or the toolbar button.
+- **Source.** The Rich / Source switch in the header (or `Ctrl+/`) shows the file's check (PDF version, end marker, pages, encryption, form fields, object count) and its objects as PDF syntax. It is read only for now. Editing is done through the code (see the `pdfedit` module); editing the source in the window is planned.
+- **Encrypted PDFs** ask for the password. It is kept in memory for that tab only and is never saved.
+- PDF, Word and Excel files open from Explorer's **Open with** or as Plume's default app.
 - Edit tools: highlight, underline, sticky note and freehand ink. Delete, move, rotate and extract pages, and merge another PDF onto the end. Fill in form fields (text, checkbox, radio, drop-down). Undo and redo cover every edit, and nothing is written until you save.
 - **Cover and retype** draws a white box over text and puts your new text on top. It does not edit the original text. The original text stays in the file under the white box.
 
@@ -215,6 +218,8 @@ Every release is listed in [CHANGELOG.md](CHANGELOG.md).
 ## AI tools (MCP)
 
 An optional, separate MCP server lets AI tools such as Claude Desktop or Claude Code read your Markdown and text files. It is local stdio only, reads (and only with `--allow-write`, writes) files inside the one folder you give it, and makes no network calls. Setup: [tools/plume-mcp/README.md](tools/plume-mcp/README.md).
+
+The MCP server does **not** read PDF, Word or Excel files. To give an AI tool a PDF, open it in Plume and use the Source view (or copy the text out of the Rich view).
 
 ## Built with
 

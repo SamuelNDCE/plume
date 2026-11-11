@@ -1,7 +1,9 @@
 {
   "name": "plume",
-  "version": "0.6.0",
-  "engines": { "node": ">=22" },
+  "version": "0.6.1",
+  "engines": {
+    "node": ">=22"
+  },
   "description": "Plume",
   "license": "MIT",
   "main": "electron/main.cjs",
@@ -14,7 +16,7 @@
     "dist": "vite build && electron-builder"
   },
   "devDependencies": {
-    "electron": "^45.1.0",
+    "electron": "45.1.0",
     "electron-builder": "^26.15.3",
     "vite": "^8.3.3"
   },
@@ -46,7 +48,10 @@
     "electronFuses": {
       "runAsNode": false,
       "enableNodeOptionsEnvironmentVariable": false,
-      "enableNodeCliInspectArguments": false
+      "enableNodeCliInspectArguments": false,
+      "enableCookieEncryption": true,
+      "onlyLoadAppFromAsar": true,
+      "enableEmbeddedAsarIntegrityValidation": true
     },
     "directories": {
       "output": "release"
@@ -227,6 +232,21 @@
         "ext": "gitignore",
         "name": "Text document",
         "role": "Editor"
+      },
+      {
+        "ext": "pdf",
+        "name": "PDF document",
+        "role": "Viewer"
+      },
+      {
+        "ext": "docx",
+        "name": "Word document",
+        "role": "Viewer"
+      },
+      {
+        "ext": "xlsx",
+        "name": "Excel workbook",
+        "role": "Viewer"
       }
     ],
     "win": {
@@ -268,7 +288,8 @@
         "repo": "plume",
         "releaseType": "release"
       }
-    ]
+    ],
+    "afterPack": "build/fuses-afterpack.cjs"
   },
   "author": "Samuel <samuelndce@gmail.com>",
   "homepage": "https://github.com/SamuelNDCE/plume",
