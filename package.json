@@ -288,8 +288,7 @@
         "repo": "plume",
         "releaseType": "release"
       }
-    ],
-    "afterPack": "build/fuses-afterpack.cjs"
+    ]
   },
   "author": "Samuel <samuelndce@gmail.com>",
   "homepage": "https://github.com/SamuelNDCE/plume",

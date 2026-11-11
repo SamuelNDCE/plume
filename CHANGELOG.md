@@ -11,7 +11,7 @@ All notable changes to Plume are written here. The format follows [Keep a Change
 
 ### Changed
 - The app refuses every browser permission request (camera, microphone, location, notifications) and blocks `<webview>` guests.
-- The Windows build sets three more Electron fuses (cookie encryption, asar-only loading, embedded asar integrity) and turns off the file-protocol extra privileges through a build hook (`build/fuses-afterpack.cjs`). `electron` is pinned to 45.1.0.
+- The Windows build sets three more Electron fuses: cookie encryption, asar-only loading and embedded asar integrity. `electron` is pinned to 45.1.0. The file-protocol extra privileges fuse stays on: turning it off stops the packaged page from loading.
 - Background promises in the startup and viewer paths report their errors to the console instead of failing silently.
 
 ### Fixed
