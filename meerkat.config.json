@@ -1,0 +1,41 @@
+{
+  "packs": [
+    "security",
+    "hygiene"
+  ],
+  "workflow": {
+    "profile": "ai-agent",
+    "preset": "quick",
+    "scope": {
+      "mode": "changed",
+      "detail": "the files the agent touched since the last commit"
+    },
+    "hooks": [
+      "agent-pre-edit",
+      "agent-post-edit"
+    ],
+    "pullRequestGate": false,
+    "baseline": "none",
+    "blocking": {
+      "failOn": "medium",
+      "suites": [
+        "secrets",
+        "risky-calls",
+        "injection-patterns",
+        "crypto-and-auth"
+      ],
+      "otherwise": "report only"
+    },
+    "output": {
+      "format": "json",
+      "stdout": "json"
+    },
+    "cache": "on",
+    "commands": {
+      "beforeEdit": "meerkat brief <file> --json",
+      "afterEdit": "meerkat gate --against HEAD --json",
+      "hooks": "meerkat ai hooks",
+      "block": "meerkat findings --fail-on medium --new"
+    }
+  }
+}
