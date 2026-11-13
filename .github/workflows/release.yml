@@ -50,7 +50,7 @@ jobs:
       # Electron and electron-builder download the same runtime and NSIS tools on every run. Cache them on Windows.
       - name: Cache Electron and electron-builder downloads
         if: runner.os == 'Windows'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~\AppData\Local\electron\Cache
